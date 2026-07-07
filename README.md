@@ -264,10 +264,40 @@ app.mount("#app");
 <FestivalMap :festival-id="1" api-base="/api/festival-mapper" />
 ```
 
+### Admin setup UI
+
+```vue
+<template>
+	<FestivalAdmin
+		title="Download Festival Setup"
+		subtitle="Configure the map, layers, and saved locations."
+		:festival-id="currentFestivalId"
+		api-base="/api/festival-mapper"
+		:theme="{
+			accent: '#f97316',
+			panel: 'rgba(30, 24, 22, 0.9)',
+			panelStrong: 'rgba(40, 30, 27, 0.96)',
+			background: 'linear-gradient(180deg, #130d0a, #090909)',
+		}" />
+</template>
+```
+
+`FestivalAdmin` follows a card-based settings layout so each setup area behaves like a separate admin setting screen while still living inside one reusable component. Theme alignment is handled through the `theme` prop, which maps directly to the component's CSS variables.
+
 | Prop          | Type     | Default                | Description             |
 | ------------- | -------- | ---------------------- | ----------------------- |
 | `festival-id` | `Number` | required               | The festival ID to load |
 | `api-base`    | `String` | `/api/festival-mapper` | API route prefix        |
+
+`FestivalAdmin` props:
+
+| Prop          | Type     | Default                | Description                                           |
+| ------------- | -------- | ---------------------- | ----------------------------------------------------- |
+| `title`       | `String` | `Festival Admin`       | Dashboard heading                                     |
+| `subtitle`    | `String` | package default        | Supporting copy below the heading                     |
+| `festival-id` | `Number` | `null`                 | Optionally preselect a festival                       |
+| `api-base`    | `String` | `/api/festival-mapper` | API route prefix                                      |
+| `theme`       | `Object` | `{}`                   | CSS variable overrides for accent, panels, text, etc. |
 
 **Interactions:**
 
