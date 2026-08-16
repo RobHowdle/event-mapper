@@ -3,7 +3,7 @@
 namespace FestivalMapper\Models;
 
 use FestivalMapper\ValueObjects\CalibrationAnchor;
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 use FestivalMapper\ValueObjects\PixelCoordinate;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,8 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int         $festival_id
  * @property float       $pixel_x
  * @property float       $pixel_y
- * @property float       $internal_x
- * @property float       $internal_y
+ * @property float       $latitude
+ * @property float       $longitude
  * @property string|null $label
  */
 class CalibrationPoint extends Model
@@ -25,16 +25,16 @@ class CalibrationPoint extends Model
         'festival_id',
         'pixel_x',
         'pixel_y',
-        'internal_x',
-        'internal_y',
+        'latitude',
+        'longitude',
         'label',
     ];
 
     protected $casts = [
-        'pixel_x'    => 'float',
-        'pixel_y'    => 'float',
-        'internal_x' => 'float',
-        'internal_y' => 'float',
+        'pixel_x'  => 'float',
+        'pixel_y'  => 'float',
+        'latitude' => 'float',
+        'longitude' => 'float',
     ];
 
     public function festival(): BelongsTo
@@ -46,7 +46,7 @@ class CalibrationPoint extends Model
     {
         return new CalibrationAnchor(
             new PixelCoordinate($this->pixel_x, $this->pixel_y),
-            new InternalCoordinate($this->internal_x, $this->internal_y),
+            new GeoCoordinate($this->latitude, $this->longitude),
         );
     }
 }

@@ -316,14 +316,14 @@ Implement `LayerInterface`:
 
 ```php
 use FestivalMapper\Contracts\LayerInterface;
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 
 class WeatherLayer implements LayerInterface
 {
     public function id(): string   { return 'weather'; }
     public function name(): string { return 'Weather'; }
 
-    public function getData(InternalCoordinate $coordinate): array
+    public function getData(GeoCoordinate $coordinate): array
     {
         // Fetch weather data for this coordinate.
         return ['temperature' => 18.5, 'condition' => 'Partly cloudy'];
@@ -371,11 +371,11 @@ $this->app->bind(CoordinateTransformerInterface::class, MyAdvancedTransformer::c
 
 ```php
 use FestivalMapper\Contracts\ElevationProviderInterface;
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 
 class OpenElevationProvider implements ElevationProviderInterface
 {
-    public function getElevation(InternalCoordinate $coordinate): ?float
+    public function getElevation(GeoCoordinate $coordinate): ?float
     {
         // Call the Open-Elevation API.
         return 312.5;
@@ -393,11 +393,11 @@ $this->app->bind(ElevationProviderInterface::class, OpenElevationProvider::class
 
 ```php
 use FestivalMapper\Contracts\What3WordsProviderInterface;
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 
 class What3WordsApiProvider implements What3WordsProviderInterface
 {
-    public function getAddress(InternalCoordinate $coordinate): ?string
+    public function getAddress(GeoCoordinate $coordinate): ?string
     {
         // Convert internal coord to lat/lng using festival bounds,
         // then call the What3Words API.

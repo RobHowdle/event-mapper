@@ -4,39 +4,39 @@ namespace FestivalMapper\Engines;
 
 use FestivalMapper\Models\Festival;
 use FestivalMapper\Models\Pin;
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
  * CRUD operations for pins.
  *
- * Pins are stored against internal coordinates so they are automatically
- * synchronised across all layers.
+ * Pins are stored using geographic coordinates so they remain independent
+ * of the festival map image dimensions.
  */
 class PinEngine
 {
     /**
-     * @param  array<string, mixed>  $metadata  Optional freeform metadata attached to the pin.
+     * @param array<string, mixed> $metadata Optional freeform metadata attached to the pin.
      */
     public function createPin(
         Festival $festival,
-        InternalCoordinate $coordinate,
+        GeoCoordinate $coordinate,
         string $label = '',
         array $metadata = [],
     ): Pin {
         return $festival->pins()->create([
-            'internal_x' => $coordinate->x,
-            'internal_y' => $coordinate->y,
-            'label'      => $label,
-            'metadata'   => $metadata,
+            'latitude'  => $coordinate->latitude,
+            'longitude' => $coordinate->longitude,
+            'label'     => $label,
+            'metadata'  => $metadata,
         ]);
     }
 
-    public function movePin(Pin $pin, InternalCoordinate $coordinate): Pin
+    public function movePin(Pin $pin, GeoCoordinate $coordinate): Pin
     {
         $pin->update([
-            'internal_x' => $coordinate->x,
-            'internal_y' => $coordinate->y,
+            'latitude'  => $coordinate->latitude,
+            'longitude' => $coordinate->longitude,
         ]);
 
         return $pin->refresh();

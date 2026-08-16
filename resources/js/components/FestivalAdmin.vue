@@ -37,6 +37,7 @@
 			class="festival-admin__status festival-admin__status--success">
 			{{ statusMessage }}
 		</p>
+
 		<p
 			v-if="errorMessage"
 			class="festival-admin__status festival-admin__status--error">
@@ -58,10 +59,12 @@
 					<span class="festival-admin__section-icon">{{
 						section.icon
 					}}</span>
+
 					<span class="festival-admin__section-copy">
 						<strong>{{ section.title }}</strong>
 						<small>{{ section.description }}</small>
 					</span>
+
 					<span class="festival-admin__section-meta">{{
 						section.meta
 					}}</span>
@@ -124,6 +127,7 @@
 										: "Create Festival"
 								}}
 							</button>
+
 							<button
 								v-if="selectedFestivalId"
 								type="button"
@@ -172,11 +176,12 @@
 								@click="uploadMapImage">
 								Upload Map
 							</button>
+
 							<span
 								v-if="mapFile"
-								class="festival-admin__helper-text"
-								>{{ mapFile.name }}</span
-							>
+								class="festival-admin__helper-text">
+								{{ mapFile.name }}
+							</span>
 						</div>
 
 						<div
@@ -185,12 +190,16 @@
 							<img
 								:src="activeFestival.map_image_url"
 								:alt="`${activeFestival.name} map`" />
+
 							<div class="festival-admin__map-meta">
-								<span
-									>{{ activeFestival.map_width || 0 }} x
-									{{ activeFestival.map_height || 0 }}</span
-								>
-								<span>{{ activeFestival.map_image_path }}</span>
+								<span>
+									{{ activeFestival.map_width || 0 }} x
+									{{ activeFestival.map_height || 0 }}
+								</span>
+
+								<span>
+									{{ activeFestival.map_image_path }}
+								</span>
 							</div>
 						</div>
 
@@ -208,7 +217,7 @@
 							<h2>Calibration Points</h2>
 							<p>
 								Add at least two anchor points to align image
-								pixels with internal coordinates.
+								pixels with geographic coordinates.
 							</p>
 						</div>
 					</div>
@@ -233,6 +242,7 @@
 										step="any"
 										required />
 								</label>
+
 								<label class="festival-admin__field">
 									<span>Pixel Y</span>
 									<input
@@ -241,28 +251,30 @@
 										step="any"
 										required />
 								</label>
+
 								<label class="festival-admin__field">
-									<span>Internal X</span>
+									<span>Latitude</span>
 									<input
 										v-model.number="
-											calibrationForm.internal_x
+											calibrationForm.latitude
 										"
 										type="number"
-										step="0.01"
-										min="0"
-										max="1"
+										step="any"
+										min="-90"
+										max="90"
 										required />
 								</label>
+
 								<label class="festival-admin__field">
-									<span>Internal Y</span>
+									<span>Longitude</span>
 									<input
 										v-model.number="
-											calibrationForm.internal_y
+											calibrationForm.longitude
 										"
 										type="number"
-										step="0.01"
-										min="0"
-										max="1"
+										step="any"
+										min="-180"
+										max="180"
 										required />
 								</label>
 							</div>
@@ -293,16 +305,18 @@
 								:key="point.id"
 								class="festival-admin__list-item">
 								<div>
-									<strong>{{
-										point.label || "Untitled point"
-									}}</strong>
+									<strong>
+										{{ point.label || "Untitled point" }}
+									</strong>
+
 									<small>
 										Pixel {{ point.pixel_x }},
-										{{ point.pixel_y }} | Internal
-										{{ point.internal_x }},
-										{{ point.internal_y }}
+										{{ point.pixel_y }} | Geo
+										{{ point.latitude }},
+										{{ point.longitude }}
 									</small>
 								</div>
+
 								<button
 									type="button"
 									class="festival-admin__text-button"
@@ -346,6 +360,7 @@
 								<strong>{{ layer.name }}</strong>
 								<small>{{ layer.id }}</small>
 							</div>
+
 							<button
 								type="button"
 								class="festival-admin__secondary-button"
@@ -366,7 +381,7 @@
 						<div>
 							<h2>Locations & Pins</h2>
 							<p>
-								Add saved locations using internal coordinates
+								Add saved locations using geographic coordinates
 								and optional metadata.
 							</p>
 						</div>
@@ -392,23 +407,24 @@
 
 							<div class="festival-admin__split">
 								<label class="festival-admin__field">
-									<span>Internal X</span>
+									<span>Latitude</span>
 									<input
-										v-model.number="pinForm.internal_x"
+										v-model.number="pinForm.latitude"
 										type="number"
-										step="0.01"
-										min="0"
-										max="1"
+										step="any"
+										min="-90"
+										max="90"
 										required />
 								</label>
+
 								<label class="festival-admin__field">
-									<span>Internal Y</span>
+									<span>Longitude</span>
 									<input
-										v-model.number="pinForm.internal_y"
+										v-model.number="pinForm.longitude"
 										type="number"
-										step="0.01"
-										min="0"
-										max="1"
+										step="any"
+										min="-180"
+										max="180"
 										required />
 								</label>
 							</div>
@@ -438,11 +454,13 @@
 								class="festival-admin__list-item">
 								<div>
 									<strong>{{ pin.label }}</strong>
-									<small
-										>Internal {{ pin.internal_x }},
-										{{ pin.internal_y }}</small
-									>
+
+									<small>
+										Geo {{ pin.latitude }},
+										{{ pin.longitude }}
+									</small>
 								</div>
+
 								<button
 									type="button"
 									class="festival-admin__text-button"
@@ -533,7 +551,7 @@ const sections = computed(() => {
 			key: "calibration",
 			icon: "03",
 			title: "Calibration",
-			description: "Align image pixels to internal coordinates.",
+			description: "Align image pixels to geographic coordinates.",
 			meta: `${calibrationPoints.value.length} points`,
 		},
 		{
@@ -574,6 +592,7 @@ watch(
 	() => props.festivalId,
 	(newFestivalId) => {
 		selectedFestivalId.value = newFestivalId;
+
 		if (newFestivalId) {
 			loadFestivalWorkspace(newFestivalId);
 		}
@@ -624,8 +643,8 @@ function createCalibrationForm() {
 	return {
 		pixel_x: 0,
 		pixel_y: 0,
-		internal_x: 0,
-		internal_y: 0,
+		latitude: 0,
+		longitude: 0,
 		label: "",
 	};
 }
@@ -633,8 +652,8 @@ function createCalibrationForm() {
 function createPinForm() {
 	return {
 		label: "",
-		internal_x: 0,
-		internal_y: 0,
+		latitude: 0,
+		longitude: 0,
 		metadata: "{}",
 	};
 }
@@ -690,13 +709,16 @@ async function loadFestivals() {
 
 async function loadFestivalWorkspace(festivalId) {
 	clearMessages();
+
 	try {
 		const festival = await apiFetch(`/festivals/${festivalId}`);
+
 		activeFestival.value = festival;
 		syncFestivalForm(festival);
 		calibrationPoints.value = festival.calibration_points ?? [];
 		pins.value = festival.pins ?? [];
 		layers.value = await apiFetch(`/festivals/${festivalId}/layers`);
+
 		emit("festival-selected", festival);
 	} catch (error) {
 		setError(error);
@@ -731,8 +753,10 @@ async function saveFestival() {
 		selectedFestivalId.value = festival.id;
 		activeFestival.value = festival;
 		syncFestivalForm(festival);
+
 		await loadFestivals();
 		await loadFestivalWorkspace(festival.id);
+
 		setStatus(isUpdating ? "Festival saved." : "Festival created.");
 		emit("saved", festival);
 	} catch (error) {
@@ -787,7 +811,9 @@ async function uploadMapImage() {
 		});
 
 		mapFile.value = null;
+
 		await loadFestivalWorkspace(selectedFestivalId.value);
+
 		setStatus("Map image uploaded.");
 	} catch (error) {
 		setError(error);
@@ -815,6 +841,7 @@ async function createCalibrationPoint() {
 
 		calibrationPoints.value = [...calibrationPoints.value, point];
 		calibrationForm.value = createCalibrationForm();
+
 		setStatus("Calibration point added.");
 	} catch (error) {
 		setError(error);
@@ -842,6 +869,7 @@ async function deleteCalibrationPoint(pointId) {
 		calibrationPoints.value = calibrationPoints.value.filter(
 			(point) => point.id !== pointId,
 		);
+
 		setStatus("Calibration point removed.");
 	} catch (error) {
 		setError(error);
@@ -869,6 +897,7 @@ async function toggleLayer(layer) {
 				? {...entry, is_active: !entry.is_active}
 				: entry,
 		);
+
 		setStatus(`Layer ${layer.is_active ? "deactivated" : "activated"}.`);
 	} catch (error) {
 		setError(error);
@@ -889,14 +918,15 @@ async function createPin() {
 		const metadata = pinForm.value.metadata.trim()
 			? JSON.parse(pinForm.value.metadata)
 			: {};
+
 		const pin = await apiFetch(
 			`/festivals/${selectedFestivalId.value}/pins`,
 			{
 				method: "POST",
 				body: JSON.stringify({
 					label: pinForm.value.label,
-					internal_x: pinForm.value.internal_x,
-					internal_y: pinForm.value.internal_y,
+					latitude: pinForm.value.latitude,
+					longitude: pinForm.value.longitude,
 					metadata,
 				}),
 			},
@@ -904,6 +934,7 @@ async function createPin() {
 
 		pins.value = [...pins.value, pin];
 		pinForm.value = createPinForm();
+
 		setStatus("Location added.");
 	} catch (error) {
 		setError(error);
@@ -926,6 +957,7 @@ async function deletePin(pinId) {
 		});
 
 		pins.value = pins.value.filter((pin) => pin.id !== pinId);
+
 		setStatus("Location removed.");
 	} catch (error) {
 		setError(error);

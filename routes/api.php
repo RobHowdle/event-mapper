@@ -1,6 +1,7 @@
 <?php
 
 use FestivalMapper\Http\Controllers\CalibrationController;
+use FestivalMapper\Http\Controllers\CoordinateController;
 use FestivalMapper\Http\Controllers\FestivalController;
 use FestivalMapper\Http\Controllers\LayerController;
 use FestivalMapper\Http\Controllers\PinController;
@@ -17,6 +18,12 @@ Route::prefix(config('festival-mapper.route_prefix', 'api/festival-mapper'))
         Route::patch('festivals/{festival}', [FestivalController::class, 'update']);
         Route::delete('festivals/{festival}', [FestivalController::class, 'destroy']);
         Route::post('festivals/{festival}/map', [FestivalController::class, 'uploadMap']);
+
+        // Coordinates
+        Route::post(
+            'festivals/{festival}/coordinates/to-pixel',
+            [CoordinateController::class, 'toPixel']
+        );
 
         // Calibration points
         Route::get('festivals/{festival}/calibration', [CalibrationController::class, 'index']);

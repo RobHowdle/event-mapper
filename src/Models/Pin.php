@@ -2,15 +2,15 @@
 
 namespace FestivalMapper\Models;
 
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int         $id
  * @property int         $festival_id
- * @property float       $internal_x
- * @property float       $internal_y
+ * @property float       $latitude
+ * @property float       $longitude
  * @property string      $label
  * @property array       $metadata
  */
@@ -20,16 +20,16 @@ class Pin extends Model
 
     protected $fillable = [
         'festival_id',
-        'internal_x',
-        'internal_y',
+        'latitude',
+        'longitude',
         'label',
         'metadata',
     ];
 
     protected $casts = [
-        'internal_x' => 'float',
-        'internal_y' => 'float',
-        'metadata'   => 'array',
+        'latitude'  => 'float',
+        'longitude' => 'float',
+        'metadata'  => 'array',
     ];
 
     public function festival(): BelongsTo
@@ -37,8 +37,11 @@ class Pin extends Model
         return $this->belongsTo(Festival::class, 'festival_id');
     }
 
-    public function toCoordinate(): InternalCoordinate
+    public function toCoordinate(): GeoCoordinate
     {
-        return new InternalCoordinate($this->internal_x, $this->internal_y);
+        return new GeoCoordinate(
+            latitude: $this->latitude,
+            longitude: $this->longitude,
+        );
     }
 }

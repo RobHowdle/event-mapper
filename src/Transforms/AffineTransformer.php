@@ -4,49 +4,43 @@ namespace FestivalMapper\Transforms;
 
 use FestivalMapper\Contracts\CoordinateTransformerInterface;
 use FestivalMapper\ValueObjects\CalibrationAnchor;
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 use FestivalMapper\ValueObjects\PixelCoordinate;
 use InvalidArgumentException;
 
-/**
- * Simple two-anchor affine transform.
- *
- * Given two calibration anchors the transform solves for a linear mapping:
- *
- *   internal.x = a * pixel.x + b * pixel.y + c
- *   internal.y = d * pixel.x + e * pixel.y + f
- *
- * Using only two points constrains the system to a similarity transform
- * (uniform scale + rotation + translation). Three or more anchors would
- * allow a full affine solution; replace this class via the
- * CoordinateTransformerInterface binding when that is needed.
- */
 class AffineTransformer implements CoordinateTransformerInterface
 {
     /**
-     * @param  CalibrationAnchor[]  $anchors
+     * Convert pixel coordinates to geographic coordinates.
+     *
+     * With two anchors this performs a similarity transform:
+     * translation + rotation + uniform scale.
+     *
+     * @param CalibrationAnchor[] $anchors
      */
-    public function toInternal(PixelCoordinate $pixel, array $anchors): InternalCoordinate
-    {
+    public function toGeo(
+        PixelCoordinate $pixel,
+        array $anchors
+    ): GeoCoordinate {
         [$a0, $a1] = $this->requireTwoAnchors($anchors);
 
-        // Solve for scale and translation using two anchors.
         $px0 = $a0->pixel->x;
         $py0 = $a0->pixel->y;
         $px1 = $a1->pixel->x;
         $py1 = $a1->pixel->y;
 
-        $ix0 = $a0->internal->x;
-        $iy0 = $a0->internal->y;
-        $ix1 = $a1->internal->x;
-        $iy1 = $a1->internal->y;
+        $lon0 = $a0->geo->longitude;
+        $lat0 = $a0->geo->latitude;
+        $lon1 = $a1->geo->longitude;
+        $lat1 = $a1->geo->latitude;
 
         $dPx = $px1 - $px0;
         $dPy = $py1 - $py0;
-        $dIx = $ix1 - $ix0;
-        $dIy = $iy1 - $iy0;
 
-        $denom = $dPx * $dPx + $dPy * $dPy;
+        $dLon = $lon1 - $lon0;
+        $dLat = $lat1 - $lat0;
+
+        $denom = ($dPx * $dPx) + ($dPy * $dPy);
 
         if (abs($denom) < 1e-10) {
             throw new InvalidArgumentException(
@@ -54,24 +48,30 @@ class AffineTransformer implements CoordinateTransformerInterface
             );
         }
 
-        // Similarity transform coefficients.
-        $a = ($dIx * $dPx + $dIy * $dPy) / $denom;
-        $b = ($dIy * $dPx - $dIx * $dPy) / $denom;
+        $a = ($dLon * $dPx + $dLat * $dPy) / $denom;
+        $b = ($dLat * $dPx - $dLon * $dPy) / $denom;
 
-        $c = $ix0 - $a * $px0 + $b * $py0;
-        $d = $iy0 - $b * $px0 - $a * $py0;
+        $c = $lon0 - ($a * $px0) + ($b * $py0);
+        $d = $lat0 - ($b * $px0) - ($a * $py0);
 
-        $x = $a * $pixel->x - $b * $pixel->y + $c;
-        $y = $b * $pixel->x + $a * $pixel->y + $d;
+        $longitude = ($a * $pixel->x) - ($b * $pixel->y) + $c;
+        $latitude = ($b * $pixel->x) + ($a * $pixel->y) + $d;
 
-        return new InternalCoordinate($x, $y);
+        return new GeoCoordinate(
+            latitude: $latitude,
+            longitude: $longitude,
+        );
     }
 
     /**
-     * @param  CalibrationAnchor[]  $anchors
+     * Convert geographic coordinates to pixel coordinates.
+     *
+     * @param CalibrationAnchor[] $anchors
      */
-    public function toPixel(InternalCoordinate $coordinate, array $anchors): PixelCoordinate
-    {
+    public function toPixel(
+        GeoCoordinate $geo,
+        array $anchors
+    ): PixelCoordinate {
         [$a0, $a1] = $this->requireTwoAnchors($anchors);
 
         $px0 = $a0->pixel->x;
@@ -79,46 +79,46 @@ class AffineTransformer implements CoordinateTransformerInterface
         $px1 = $a1->pixel->x;
         $py1 = $a1->pixel->y;
 
-        $ix0 = $a0->internal->x;
-        $iy0 = $a0->internal->y;
-        $ix1 = $a1->internal->x;
-        $iy1 = $a1->internal->y;
+        $lon0 = $a0->geo->longitude;
+        $lat0 = $a0->geo->latitude;
+        $lon1 = $a1->geo->longitude;
+        $lat1 = $a1->geo->latitude;
 
         $dPx = $px1 - $px0;
         $dPy = $py1 - $py0;
-        $dIx = $ix1 - $ix0;
-        $dIy = $iy1 - $iy0;
 
-        $denom = $dIx * $dIx + $dIy * $dIy;
+        $dLon = $lon1 - $lon0;
+        $dLat = $lat1 - $lat0;
+
+        $denom = ($dLon * $dLon) + ($dLat * $dLat);
 
         if (abs($denom) < 1e-10) {
             throw new InvalidArgumentException(
-                'Calibration anchors are too close together in internal space to invert the transform.'
+                'Calibration anchors are too close together in geographic space to invert the transform.'
             );
         }
 
-        // Inverse similarity transform coefficients.
-        $a = ($dPx * $dIx + $dPy * $dIy) / $denom;
-        $b = ($dPy * $dIx - $dPx * $dIy) / $denom;
+        $a = ($dPx * $dLon + $dPy * $dLat) / $denom;
+        $b = ($dPy * $dLon - $dPx * $dLat) / $denom;
 
-        $c = $px0 - $a * $ix0 + $b * $iy0;
-        $d = $py0 - $b * $ix0 - $a * $iy0;
+        $c = $px0 - ($a * $lon0) + ($b * $lat0);
+        $d = $py0 - ($b * $lon0) - ($a * $lat0);
 
-        $x = $a * $coordinate->x - $b * $coordinate->y + $c;
-        $y = $b * $coordinate->x + $a * $coordinate->y + $d;
+        $x = ($a * $geo->longitude) - ($b * $geo->latitude) + $c;
+        $y = ($b * $geo->longitude) + ($a * $geo->latitude) + $d;
 
         return new PixelCoordinate($x, $y);
     }
 
     /**
-     * @param  CalibrationAnchor[]  $anchors
+     * @param CalibrationAnchor[] $anchors
      * @return array{0: CalibrationAnchor, 1: CalibrationAnchor}
      */
     private function requireTwoAnchors(array $anchors): array
     {
         if (count($anchors) < 2) {
             throw new InvalidArgumentException(
-                'At least two calibration anchors are required for the affine transform.'
+                'At least two calibration anchors are required for the transform.'
             );
         }
 

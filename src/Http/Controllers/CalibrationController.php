@@ -12,17 +12,21 @@ class CalibrationController extends Controller
 {
     public function index(Festival $festival): JsonResponse
     {
-        return response()->json($festival->calibrationPoints()->get());
+        return response()->json(
+            $festival->calibrationPoints()->get()
+        );
     }
 
-    public function store(Request $request, Festival $festival): JsonResponse
-    {
+    public function store(
+        Request $request,
+        Festival $festival
+    ): JsonResponse {
         $validated = $request->validate([
-            'pixel_x'    => ['required', 'numeric'],
-            'pixel_y'    => ['required', 'numeric'],
-            'internal_x' => ['required', 'numeric'],
-            'internal_y' => ['required', 'numeric'],
-            'label'      => ['nullable', 'string', 'max:255'],
+            'pixel_x'  => ['required', 'numeric'],
+            'pixel_y'  => ['required', 'numeric'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'label'   => ['nullable', 'string', 'max:255'],
         ]);
 
         $point = $festival->calibrationPoints()->create($validated);
@@ -30,14 +34,17 @@ class CalibrationController extends Controller
         return response()->json($point, 201);
     }
 
-    public function update(Request $request, Festival $festival, CalibrationPoint $calibrationPoint): JsonResponse
-    {
+    public function update(
+        Request $request,
+        Festival $festival,
+        CalibrationPoint $calibrationPoint
+    ): JsonResponse {
         $validated = $request->validate([
-            'pixel_x'    => ['sometimes', 'numeric'],
-            'pixel_y'    => ['sometimes', 'numeric'],
-            'internal_x' => ['sometimes', 'numeric'],
-            'internal_y' => ['sometimes', 'numeric'],
-            'label'      => ['nullable', 'string', 'max:255'],
+            'pixel_x'  => ['sometimes', 'numeric'],
+            'pixel_y'  => ['sometimes', 'numeric'],
+            'latitude' => ['sometimes', 'numeric', 'between:-90,90'],
+            'longitude' => ['sometimes', 'numeric', 'between:-180,180'],
+            'label'   => ['nullable', 'string', 'max:255'],
         ]);
 
         $calibrationPoint->update($validated);
@@ -45,8 +52,10 @@ class CalibrationController extends Controller
         return response()->json($calibrationPoint);
     }
 
-    public function destroy(Festival $festival, CalibrationPoint $calibrationPoint): JsonResponse
-    {
+    public function destroy(
+        Festival $festival,
+        CalibrationPoint $calibrationPoint
+    ): JsonResponse {
         $calibrationPoint->delete();
 
         return response()->json(null, 204);

@@ -4,7 +4,7 @@ namespace FestivalMapper\Engines;
 
 use FestivalMapper\Contracts\LayerInterface;
 use FestivalMapper\Models\Festival;
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 use InvalidArgumentException;
 
 /**
@@ -47,7 +47,7 @@ class LayerEngine
      *
      * @return array<int, array<string, mixed>>
      */
-    public function resolveForFestival(Festival $festival, InternalCoordinate $coordinate): array
+    public function resolveForFestival(Festival $festival, GeoCoordinate $coordinate): array
     {
         $activeLayerIds = $festival->activeLayers()->pluck('layer_key')->all();
 

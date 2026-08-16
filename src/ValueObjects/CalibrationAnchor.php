@@ -2,28 +2,24 @@
 
 namespace FestivalMapper\ValueObjects;
 
-/**
- * A calibration anchor links a known pixel position on the map image to a
- * known internal coordinate.
- *
- * A minimum of two anchors are needed for an affine transform.  Three or more
- * anchors will allow a least-squares best-fit in future implementations.
- */
 final readonly class CalibrationAnchor
 {
     public function __construct(
-        public PixelCoordinate    $pixel,
-        public InternalCoordinate $internal,
+        public PixelCoordinate $pixel,
+        public GeoCoordinate $geo,
     ) {}
 
     /**
-     * @return array{pixel: array{x: float, y: float}, internal: array{x: float, y: float}}
+     * @return array{
+     *     pixel: array{x: float, y: float},
+     *     geo: array{latitude: float, longitude: float}
+     * }
      */
     public function toArray(): array
     {
         return [
-            'pixel'    => $this->pixel->toArray(),
-            'internal' => $this->internal->toArray(),
+            'pixel' => $this->pixel->toArray(),
+            'geo' => $this->geo->toArray(),
         ];
     }
 
@@ -31,7 +27,7 @@ final readonly class CalibrationAnchor
     {
         return new self(
             PixelCoordinate::fromArray($data['pixel']),
-            InternalCoordinate::fromArray($data['internal']),
+            GeoCoordinate::fromArray($data['geo']),
         );
     }
 }

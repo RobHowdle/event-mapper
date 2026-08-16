@@ -5,13 +5,13 @@ namespace FestivalMapper\Layers;
 use FestivalMapper\Contracts\LayerInterface;
 use FestivalMapper\Engines\CoordinateEngine;
 use FestivalMapper\Models\Festival;
-use FestivalMapper\ValueObjects\InternalCoordinate;
+use FestivalMapper\ValueObjects\GeoCoordinate;
 
 /**
  * Displays the uploaded festival map image.
  *
- * Returns the pixel position for the given internal coordinate so the
- * frontend Vue component can render the pin at the correct location.
+ * Returns the pixel position for the given geographic coordinate so the
+ *  * frontend Vue component can render the pin at the correct location.
  */
 class FestivalImageLayer implements LayerInterface
 {
@@ -30,10 +30,9 @@ class FestivalImageLayer implements LayerInterface
         return 'Festival Map';
     }
 
-    public function getData(InternalCoordinate $coordinate): array
+    public function getData(GeoCoordinate $coordinate): array
     {
-        $pixel = $this->coordinateEngine->internalToPixel($this->festival, $coordinate);
-
+        $pixel = $this->coordinateEngine->geoToPixel($this->festival, $coordinate);
         return [
             'image_url' => $this->festival->map_image_path,
             'width'     => $this->festival->map_width,
