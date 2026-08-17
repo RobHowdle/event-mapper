@@ -11,8 +11,8 @@ return new class extends Migration
         Schema::create('festival_mapper_pins', function (Blueprint $table) {
             $table->id();
             $table->foreignId('festival_id')->constrained('festival_mapper_festivals')->cascadeOnDelete();
-            $table->double('internal_x');
-            $table->double('internal_y');
+            $table->double('latitude');
+            $table->double('longitude');
             $table->string('label')->default('');
             $table->json('metadata')->nullable();
             $table->timestamps();

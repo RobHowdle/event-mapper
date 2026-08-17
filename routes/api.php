@@ -20,10 +20,8 @@ Route::prefix(config('festival-mapper.route_prefix', 'api/festival-mapper'))
         Route::post('festivals/{festival}/map', [FestivalController::class, 'uploadMap']);
 
         // Coordinates
-        Route::post(
-            'festivals/{festival}/coordinates/to-pixel',
-            [CoordinateController::class, 'toPixel']
-        );
+        Route::post('festivals/{festival}/coordinates/to-pixel', [CoordinateController::class, 'toPixel']);
+        Route::post('festivals/{festival}/coordinates/to-geo', [CoordinateController::class, 'toGeo']);
 
         // Calibration points
         Route::get('festivals/{festival}/calibration', [CalibrationController::class, 'index']);

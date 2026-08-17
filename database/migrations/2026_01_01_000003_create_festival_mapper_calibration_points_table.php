@@ -13,8 +13,8 @@ return new class extends Migration
             $table->foreignId('festival_id')->constrained('festival_mapper_festivals')->cascadeOnDelete();
             $table->double('pixel_x');
             $table->double('pixel_y');
-            $table->double('internal_x');
-            $table->double('internal_y');
+            $table->double('latitude');
+            $table->double('longitude');
             $table->string('label')->nullable();
             $table->timestamps();
         });
