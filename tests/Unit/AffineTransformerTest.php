@@ -20,11 +20,12 @@ class AffineTransformerTest extends TestCase
     }
 
     /**
-     * Two calibration points defining a simple geographic transform.
+     * Three non-collinear calibration points defining a simple affine transform.
      *
      * Pixel:
      *   (0, 0)       -> (54.000000, -1.000000)
-     *   (1000, 1000) -> (54.010000, -0.990000)
+     *   (1000, 0)    -> (54.000000, -0.990000)
+     *   (0, 1000)    -> (54.010000, -1.000000)
      */
     private function anchors(): array
     {
@@ -36,11 +37,20 @@ class AffineTransformerTest extends TestCase
                     longitude: -1.000000,
                 ),
             ),
+
             new CalibrationAnchor(
-                new PixelCoordinate(1000.0, 1000.0),
+                new PixelCoordinate(1000.0, 0.0),
+                new GeoCoordinate(
+                    latitude: 54.000000,
+                    longitude: -0.990000,
+                ),
+            ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(0.0, 1000.0),
                 new GeoCoordinate(
                     latitude: 54.010000,
-                    longitude: -0.990000,
+                    longitude: -1.000000,
                 ),
             ),
         ];
@@ -54,8 +64,17 @@ class AffineTransformerTest extends TestCase
             $this->anchors()
         );
 
-        $this->assertEqualsWithDelta(54.000000, $result->latitude, 1e-9);
-        $this->assertEqualsWithDelta(-1.000000, $result->longitude, 1e-9);
+        $this->assertEqualsWithDelta(
+            54.000000,
+            $result->latitude,
+            1e-9
+        );
+
+        $this->assertEqualsWithDelta(
+            -1.000000,
+            $result->longitude,
+            1e-9
+        );
     }
 
     #[Test]
@@ -66,8 +85,17 @@ class AffineTransformerTest extends TestCase
             $this->anchors()
         );
 
-        $this->assertEqualsWithDelta(54.010000, $result->latitude, 1e-9);
-        $this->assertEqualsWithDelta(-0.990000, $result->longitude, 1e-9);
+        $this->assertEqualsWithDelta(
+            54.010000,
+            $result->latitude,
+            1e-9
+        );
+
+        $this->assertEqualsWithDelta(
+            -0.990000,
+            $result->longitude,
+            1e-9
+        );
     }
 
     #[Test]
@@ -78,14 +106,26 @@ class AffineTransformerTest extends TestCase
             $this->anchors()
         );
 
-        $this->assertEqualsWithDelta(54.005000, $result->latitude, 1e-9);
-        $this->assertEqualsWithDelta(-0.995000, $result->longitude, 1e-9);
+        $this->assertEqualsWithDelta(
+            54.005000,
+            $result->latitude,
+            1e-9
+        );
+
+        $this->assertEqualsWithDelta(
+            -0.995000,
+            $result->longitude,
+            1e-9
+        );
     }
 
     #[Test]
     public function it_round_trips_pixel_through_geo_and_back(): void
     {
-        $original = new PixelCoordinate(347.0, 812.0);
+        $original = new PixelCoordinate(
+            347.0,
+            812.0
+        );
 
         $geo = $this->transformer->toGeo(
             $original,
@@ -97,8 +137,17 @@ class AffineTransformerTest extends TestCase
             $this->anchors()
         );
 
-        $this->assertEqualsWithDelta($original->x, $restored->x, 1e-6);
-        $this->assertEqualsWithDelta($original->y, $restored->y, 1e-6);
+        $this->assertEqualsWithDelta(
+            $original->x,
+            $restored->x,
+            1e-6
+        );
+
+        $this->assertEqualsWithDelta(
+            $original->y,
+            $restored->y,
+            1e-6
+        );
     }
 
     #[Test]
@@ -133,9 +182,11 @@ class AffineTransformerTest extends TestCase
     }
 
     #[Test]
-    public function it_throws_when_fewer_than_two_anchors_are_provided(): void
+    public function it_throws_when_fewer_than_three_anchors_are_provided(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(
+            InvalidArgumentException::class
+        );
 
         $this->transformer->toGeo(
             new PixelCoordinate(100.0, 100.0),
@@ -147,64 +198,25 @@ class AffineTransformerTest extends TestCase
                         longitude: -1.000000,
                     ),
                 ),
+
+                new CalibrationAnchor(
+                    new PixelCoordinate(1000.0, 0.0),
+                    new GeoCoordinate(
+                        latitude: 54.000000,
+                        longitude: -0.990000,
+                    ),
+                ),
             ]
         );
     }
 
     #[Test]
-    public function it_throws_when_pixel_anchors_are_coincident(): void
+    public function it_throws_when_pixel_anchors_are_collinear(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-
-        $duplicateAnchor = new CalibrationAnchor(
-            new PixelCoordinate(100.0, 100.0),
-            new GeoCoordinate(
-                latitude: 54.005000,
-                longitude: -0.995000,
-            ),
+        $this->expectException(
+            InvalidArgumentException::class
         );
 
-        $this->transformer->toGeo(
-            new PixelCoordinate(50.0, 50.0),
-            [$duplicateAnchor, $duplicateAnchor]
-        );
-    }
-
-    #[Test]
-    public function it_throws_when_geo_anchors_are_coincident(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-
-        $anchor1 = new CalibrationAnchor(
-            new PixelCoordinate(0.0, 0.0),
-            new GeoCoordinate(
-                latitude: 54.000000,
-                longitude: -1.000000,
-            ),
-        );
-
-        $anchor2 = new CalibrationAnchor(
-            new PixelCoordinate(1000.0, 1000.0),
-            new GeoCoordinate(
-                latitude: 54.000000,
-                longitude: -1.000000,
-            ),
-        );
-
-        $this->transformer->toPixel(
-            new GeoCoordinate(
-                latitude: 54.005000,
-                longitude: -0.995000,
-            ),
-            [$anchor1, $anchor2]
-        );
-    }
-
-    #[Test]
-    public function it_handles_non_axis_aligned_transform(): void
-    {
-        // Moving 1000 pixels vertically corresponds to moving
-        // east by 0.01 degrees of longitude.
         $anchors = [
             new CalibrationAnchor(
                 new PixelCoordinate(0.0, 0.0),
@@ -213,6 +225,88 @@ class AffineTransformerTest extends TestCase
                     longitude: -1.000000,
                 ),
             ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(500.0, 500.0),
+                new GeoCoordinate(
+                    latitude: 54.005000,
+                    longitude: -0.995000,
+                ),
+            ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(1000.0, 1000.0),
+                new GeoCoordinate(
+                    latitude: 54.010000,
+                    longitude: -0.990000,
+                ),
+            ),
+        ];
+
+        $this->transformer->toGeo(
+            new PixelCoordinate(250.0, 250.0),
+            $anchors
+        );
+    }
+
+    #[Test]
+    public function it_throws_when_geographic_transform_cannot_be_inverted(): void
+    {
+        $this->expectException(
+            InvalidArgumentException::class
+        );
+
+        $sameGeo = new GeoCoordinate(
+            latitude: 54.000000,
+            longitude: -1.000000,
+        );
+
+        $anchors = [
+            new CalibrationAnchor(
+                new PixelCoordinate(0.0, 0.0),
+                $sameGeo,
+            ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(1000.0, 0.0),
+                $sameGeo,
+            ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(0.0, 1000.0),
+                $sameGeo,
+            ),
+        ];
+
+        $this->transformer->toPixel(
+            new GeoCoordinate(
+                latitude: 54.005000,
+                longitude: -0.995000,
+            ),
+            $anchors
+        );
+    }
+
+    #[Test]
+    public function it_handles_non_axis_aligned_transform(): void
+    {
+        $anchors = [
+            new CalibrationAnchor(
+                new PixelCoordinate(0.0, 0.0),
+                new GeoCoordinate(
+                    latitude: 54.000000,
+                    longitude: -1.000000,
+                ),
+            ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(1000.0, 0.0),
+                new GeoCoordinate(
+                    latitude: 54.010000,
+                    longitude: -1.000000,
+                ),
+            ),
+
             new CalibrationAnchor(
                 new PixelCoordinate(0.0, 1000.0),
                 new GeoCoordinate(
@@ -223,12 +317,12 @@ class AffineTransformerTest extends TestCase
         ];
 
         $geo = $this->transformer->toGeo(
-            new PixelCoordinate(0.0, 500.0),
+            new PixelCoordinate(500.0, 500.0),
             $anchors
         );
 
         $this->assertEqualsWithDelta(
-            54.000000,
+            54.005000,
             $geo->latitude,
             1e-9
         );
@@ -237,6 +331,61 @@ class AffineTransformerTest extends TestCase
             -0.995000,
             $geo->longitude,
             1e-9
+        );
+    }
+
+    #[Test]
+    public function it_uses_all_calibration_anchors_for_best_fit(): void
+    {
+        $anchors = [
+            new CalibrationAnchor(
+                new PixelCoordinate(0, 0),
+                new GeoCoordinate(
+                    latitude: 54.0000,
+                    longitude: -1.0000,
+                ),
+            ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(1000, 0),
+                new GeoCoordinate(
+                    latitude: 54.0000,
+                    longitude: -0.9900,
+                ),
+            ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(0, 1000),
+                new GeoCoordinate(
+                    latitude: 54.0102,
+                    longitude: -1.0001,
+                ),
+            ),
+
+            new CalibrationAnchor(
+                new PixelCoordinate(1000, 1000),
+                new GeoCoordinate(
+                    latitude: 54.0102,
+                    longitude: -0.9899,
+                ),
+            ),
+        ];
+
+        $result = $this->transformer->toGeo(
+            new PixelCoordinate(500, 500),
+            $anchors
+        );
+
+        $this->assertEqualsWithDelta(
+            54.0051,
+            $result->latitude,
+            0.0001
+        );
+
+        $this->assertEqualsWithDelta(
+            -0.9950,
+            $result->longitude,
+            0.0001
         );
     }
 }

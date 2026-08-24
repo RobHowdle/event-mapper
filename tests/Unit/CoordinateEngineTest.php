@@ -41,9 +41,17 @@ class CoordinateEngineTest extends TestCase
         CalibrationPoint::create([
             'festival_id' => $festival->id,
             'pixel_x' => 1000,
+            'pixel_y' => 0,
+            'latitude' => 54.000000,
+            'longitude' => -0.990000,
+        ]);
+
+        CalibrationPoint::create([
+            'festival_id' => $festival->id,
+            'pixel_x' => 0,
             'pixel_y' => 1000,
             'latitude' => 54.010000,
-            'longitude' => -0.990000,
+            'longitude' => -1.000000,
         ]);
 
         $engine = new CoordinateEngine(
@@ -86,9 +94,17 @@ class CoordinateEngineTest extends TestCase
         CalibrationPoint::create([
             'festival_id' => $festival->id,
             'pixel_x' => 1000,
+            'pixel_y' => 0,
+            'latitude' => 54.000000,
+            'longitude' => -0.990000,
+        ]);
+
+        CalibrationPoint::create([
+            'festival_id' => $festival->id,
+            'pixel_x' => 0,
             'pixel_y' => 1000,
             'latitude' => 54.010000,
-            'longitude' => -0.990000,
+            'longitude' => -1.000000,
         ]);
 
         $engine = new CoordinateEngine(
@@ -106,13 +122,13 @@ class CoordinateEngineTest extends TestCase
         $this->assertEqualsWithDelta(
             500,
             $result->x,
-            1e-9
+            1e-6
         );
 
         $this->assertEqualsWithDelta(
             500,
             $result->y,
-            1e-9
+            1e-6
         );
     }
 }

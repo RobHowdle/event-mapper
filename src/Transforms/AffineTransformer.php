@@ -11,10 +11,12 @@ use InvalidArgumentException;
 class AffineTransformer implements CoordinateTransformerInterface
 {
     /**
-     * Convert pixel coordinates to geographic coordinates.
+     * Convert festival-image pixels to geographic coordinates.
      *
-     * With two anchors this performs a similarity transform:
-     * translation + rotation + uniform scale.
+     * Fits a full affine transform across all calibration anchors:
+     *
+     * longitude = a*x + b*y + c
+     * latitude  = d*x + e*y + f
      *
      * @param CalibrationAnchor[] $anchors
      */
@@ -22,40 +24,17 @@ class AffineTransformer implements CoordinateTransformerInterface
         PixelCoordinate $pixel,
         array $anchors
     ): GeoCoordinate {
-        [$a0, $a1] = $this->requireTwoAnchors($anchors);
+        $transform = $this->fitPixelToGeo($anchors);
 
-        $px0 = $a0->pixel->x;
-        $py0 = $a0->pixel->y;
-        $px1 = $a1->pixel->x;
-        $py1 = $a1->pixel->y;
+        $longitude =
+            ($transform['a'] * $pixel->x)
+            + ($transform['b'] * $pixel->y)
+            + $transform['c'];
 
-        $lon0 = $a0->geo->longitude;
-        $lat0 = $a0->geo->latitude;
-        $lon1 = $a1->geo->longitude;
-        $lat1 = $a1->geo->latitude;
-
-        $dPx = $px1 - $px0;
-        $dPy = $py1 - $py0;
-
-        $dLon = $lon1 - $lon0;
-        $dLat = $lat1 - $lat0;
-
-        $denom = ($dPx * $dPx) + ($dPy * $dPy);
-
-        if (abs($denom) < 1e-10) {
-            throw new InvalidArgumentException(
-                'Calibration anchors are too close together to compute a reliable transform.'
-            );
-        }
-
-        $a = ($dLon * $dPx + $dLat * $dPy) / $denom;
-        $b = ($dLat * $dPx - $dLon * $dPy) / $denom;
-
-        $c = $lon0 - ($a * $px0) + ($b * $py0);
-        $d = $lat0 - ($b * $px0) - ($a * $py0);
-
-        $longitude = ($a * $pixel->x) - ($b * $pixel->y) + $c;
-        $latitude = ($b * $pixel->x) + ($a * $pixel->y) + $d;
+        $latitude =
+            ($transform['d'] * $pixel->x)
+            + ($transform['e'] * $pixel->y)
+            + $transform['f'];
 
         return new GeoCoordinate(
             latitude: $latitude,
@@ -64,7 +43,7 @@ class AffineTransformer implements CoordinateTransformerInterface
     }
 
     /**
-     * Convert geographic coordinates to pixel coordinates.
+     * Convert geographic coordinates back to festival-image pixels.
      *
      * @param CalibrationAnchor[] $anchors
      */
@@ -72,56 +51,196 @@ class AffineTransformer implements CoordinateTransformerInterface
         GeoCoordinate $geo,
         array $anchors
     ): PixelCoordinate {
-        [$a0, $a1] = $this->requireTwoAnchors($anchors);
+        $transform = $this->fitPixelToGeo($anchors);
 
-        $px0 = $a0->pixel->x;
-        $py0 = $a0->pixel->y;
-        $px1 = $a1->pixel->x;
-        $py1 = $a1->pixel->y;
+        $a = $transform['a'];
+        $b = $transform['b'];
+        $c = $transform['c'];
 
-        $lon0 = $a0->geo->longitude;
-        $lat0 = $a0->geo->latitude;
-        $lon1 = $a1->geo->longitude;
-        $lat1 = $a1->geo->latitude;
+        $d = $transform['d'];
+        $e = $transform['e'];
+        $f = $transform['f'];
 
-        $dPx = $px1 - $px0;
-        $dPy = $py1 - $py0;
+        /*
+         * Invert:
+         *
+         * [ longitude - c ]   [ a  b ] [ x ]
+         * [ latitude  - f ] = [ d  e ] [ y ]
+         */
+        $determinant = ($a * $e) - ($b * $d);
 
-        $dLon = $lon1 - $lon0;
-        $dLat = $lat1 - $lat0;
-
-        $denom = ($dLon * $dLon) + ($dLat * $dLat);
-
-        if (abs($denom) < 1e-10) {
+        if (abs($determinant) < 1e-15) {
             throw new InvalidArgumentException(
-                'Calibration anchors are too close together in geographic space to invert the transform.'
+                'Calibration transform cannot be inverted.'
             );
         }
 
-        $a = ($dPx * $dLon + $dPy * $dLat) / $denom;
-        $b = ($dPy * $dLon - $dPx * $dLat) / $denom;
+        $longitude = $geo->longitude - $c;
+        $latitude = $geo->latitude - $f;
 
-        $c = $px0 - ($a * $lon0) + ($b * $lat0);
-        $d = $py0 - ($b * $lon0) - ($a * $lat0);
+        $x =
+            (($e * $longitude) - ($b * $latitude))
+            / $determinant;
 
-        $x = ($a * $geo->longitude) - ($b * $geo->latitude) + $c;
-        $y = ($b * $geo->longitude) + ($a * $geo->latitude) + $d;
+        $y =
+            ((-$d * $longitude) + ($a * $latitude))
+            / $determinant;
 
         return new PixelCoordinate($x, $y);
     }
 
     /**
+     * Fit a least-squares full affine transform using every calibration anchor.
+     *
+     * longitude = a*x + b*y + c
+     * latitude  = d*x + e*y + f
+     *
      * @param CalibrationAnchor[] $anchors
-     * @return array{0: CalibrationAnchor, 1: CalibrationAnchor}
+     *
+     * @return array{
+     *     a: float,
+     *     b: float,
+     *     c: float,
+     *     d: float,
+     *     e: float,
+     *     f: float
+     * }
      */
-    private function requireTwoAnchors(array $anchors): array
+    private function fitPixelToGeo(array $anchors): array
     {
-        if (count($anchors) < 2) {
+        $this->requireAtLeastThreeAnchors($anchors);
+
+        $count = count($anchors);
+
+        $meanX = 0.0;
+        $meanY = 0.0;
+        $meanLongitude = 0.0;
+        $meanLatitude = 0.0;
+
+        foreach ($anchors as $anchor) {
+            $meanX += $anchor->pixel->x;
+            $meanY += $anchor->pixel->y;
+
+            $meanLongitude += $anchor->geo->longitude;
+            $meanLatitude += $anchor->geo->latitude;
+        }
+
+        $meanX /= $count;
+        $meanY /= $count;
+
+        $meanLongitude /= $count;
+        $meanLatitude /= $count;
+
+        /*
+         * Pixel covariance matrix:
+         *
+         * [ Sxx Sxy ]
+         * [ Sxy Syy ]
+         *
+         * This lets us solve the X/Y coefficients independently
+         * for longitude and latitude.
+         */
+        $sxx = 0.0;
+        $sxy = 0.0;
+        $syy = 0.0;
+
+        $sxLongitude = 0.0;
+        $syLongitude = 0.0;
+
+        $sxLatitude = 0.0;
+        $syLatitude = 0.0;
+
+        foreach ($anchors as $anchor) {
+            $x = $anchor->pixel->x - $meanX;
+            $y = $anchor->pixel->y - $meanY;
+
+            $longitude =
+                $anchor->geo->longitude - $meanLongitude;
+
+            $latitude =
+                $anchor->geo->latitude - $meanLatitude;
+
+            $sxx += $x * $x;
+            $sxy += $x * $y;
+            $syy += $y * $y;
+
+            $sxLongitude += $x * $longitude;
+            $syLongitude += $y * $longitude;
+
+            $sxLatitude += $x * $latitude;
+            $syLatitude += $y * $latitude;
+        }
+
+        $determinant =
+            ($sxx * $syy)
+            - ($sxy * $sxy);
+
+        /*
+         * A zero determinant means the calibration points are
+         * effectively on one line, so a two-dimensional affine
+         * transform cannot be determined.
+         */
+        if (abs($determinant) < 1e-10) {
             throw new InvalidArgumentException(
-                'At least two calibration anchors are required for the transform.'
+                'Calibration anchors must contain at least three non-collinear points.'
             );
         }
 
-        return [$anchors[0], $anchors[1]];
+        /*
+         * Longitude:
+         *
+         * longitude = a*x + b*y + c
+         */
+        $a =
+            (($sxLongitude * $syy) - ($syLongitude * $sxy))
+            / $determinant;
+
+        $b =
+            (($syLongitude * $sxx) - ($sxLongitude * $sxy))
+            / $determinant;
+
+        $c =
+            $meanLongitude
+            - ($a * $meanX)
+            - ($b * $meanY);
+
+        /*
+         * Latitude:
+         *
+         * latitude = d*x + e*y + f
+         */
+        $d =
+            (($sxLatitude * $syy) - ($syLatitude * $sxy))
+            / $determinant;
+
+        $e =
+            (($syLatitude * $sxx) - ($sxLatitude * $sxy))
+            / $determinant;
+
+        $f =
+            $meanLatitude
+            - ($d * $meanX)
+            - ($e * $meanY);
+
+        return compact(
+            'a',
+            'b',
+            'c',
+            'd',
+            'e',
+            'f',
+        );
+    }
+
+    /**
+     * @param CalibrationAnchor[] $anchors
+     */
+    private function requireAtLeastThreeAnchors(array $anchors): void
+    {
+        if (count($anchors) < 3) {
+            throw new InvalidArgumentException(
+                'At least three calibration anchors are required for an affine transform.'
+            );
+        }
     }
 }

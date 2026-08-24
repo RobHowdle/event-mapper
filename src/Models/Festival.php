@@ -45,7 +45,9 @@ class Festival extends Model
 
     public function activeLayers(): HasMany
     {
-        return $this->hasMany(MapLayer::class, 'festival_id')->where('is_active', true);
+        return $this->hasMany(MapLayer::class, 'festival_id')
+            ->where('is_active', true)
+            ->orderBy('sort_order');
     }
 
     public function mapLayers(): HasMany

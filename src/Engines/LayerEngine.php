@@ -49,18 +49,22 @@ class LayerEngine
      */
     public function resolveForFestival(Festival $festival, GeoCoordinate $coordinate): array
     {
-        $activeLayerIds = $festival->activeLayers()->pluck('layer_key')->all();
+        $activeLayerIds = $festival
+            ->activeLayers()
+            ->orderBy('sort_order')
+            ->pluck('layer_key')
+            ->all();
 
         return collect($activeLayerIds)
             ->filter(fn(string $id) => isset($this->layers[$id]))
-            ->map(function (string $id) use ($coordinate) {
+            ->map(function (string $id) use ($festival, $coordinate) {
                 $layer = $this->layers[$id];
 
                 return [
                     'id'     => $layer->id(),
                     'name'   => $layer->name(),
                     'render' => $layer->render(),
-                    'data'   => $layer->getData($coordinate),
+                    'data'   => $layer->getData($festival, $coordinate),
                 ];
             })
             ->values()

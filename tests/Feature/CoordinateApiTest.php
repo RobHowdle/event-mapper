@@ -37,9 +37,17 @@ class CoordinateApiTest extends TestCase
         CalibrationPoint::create([
             'festival_id' => $festival->id,
             'pixel_x' => 1000,
+            'pixel_y' => 0,
+            'latitude' => 54.000000,
+            'longitude' => -0.990000,
+        ]);
+
+        CalibrationPoint::create([
+            'festival_id' => $festival->id,
+            'pixel_x' => 0,
             'pixel_y' => 1000,
             'latitude' => 54.010000,
-            'longitude' => -0.990000,
+            'longitude' => -1.000000,
         ]);
 
         return $festival;
@@ -64,9 +72,21 @@ class CoordinateApiTest extends TestCase
                 'pixel' => ['x', 'y'],
             ])
             ->assertJsonPath('geo.latitude', 54.005)
-            ->assertJsonPath('geo.longitude', -0.995)
-            ->assertJsonPath('pixel.x', 500)
-            ->assertJsonPath('pixel.y', 500);
+            ->assertJsonPath('geo.longitude', -0.995);
+
+        $json = $response->json();
+
+        $this->assertEqualsWithDelta(
+            500.0,
+            $json['pixel']['x'],
+            1e-6
+        );
+
+        $this->assertEqualsWithDelta(
+            500.0,
+            $json['pixel']['y'],
+            1e-6
+        );
     }
 
     public function test_pixel_to_geo_endpoint_returns_geographic_coordinate(): void

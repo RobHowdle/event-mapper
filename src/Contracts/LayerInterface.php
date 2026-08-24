@@ -3,6 +3,7 @@
 namespace FestivalMapper\Contracts;
 
 use FestivalMapper\ValueObjects\GeoCoordinate;
+use FestivalMapper\Models\Festival;
 
 interface LayerInterface
 {
@@ -21,8 +22,10 @@ interface LayerInterface
      *
      * @return array<string, mixed>
      */
-    public function getData(GeoCoordinate $coordinate): array;
-
+    public function getData(
+        Festival $festival,
+        GeoCoordinate $coordinate
+    ): array;
     /**
      * Return the frontend rendering configuration for this layer.
      *

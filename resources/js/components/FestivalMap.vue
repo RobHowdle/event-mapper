@@ -1,26 +1,32 @@
 <template>
 	<div class="festival-map">
 		<LayerSwitcher
-			:layers="layers"
+			:layers="activeLayers"
 			:active-layer-id="activeLayerId"
 			@switch="onLayerSwitch" />
 
 		<div class="festival-map__canvas-wrapper">
-			<MapCanvas
+			<FestivalImageMapLayer
+				v-if="isFestivalImageLayer && festival"
 				:festival="festival"
-				:pins="pins"
-				:active-layer="activeLayer"
-				@pin-dropped="onPinDropped"
-				@pin-moved="onPinMoved"
-				@pin-deleted="onPinDeleted" />
+				:current-geo="currentGeo"
+				:api-base="apiBase"
+				@position-changed="onPositionChanged" />
+
+			<GeoMapLayer
+				v-else-if="isGeoMapLayer"
+				:current-geo="currentGeo"
+				@position-changed="onPositionChanged" />
 		</div>
 	</div>
 </template>
 
 <script setup>
 import {ref, computed, onMounted} from "vue";
-import MapCanvas from "./MapCanvas.vue";
 import LayerSwitcher from "./LayerSwitcher.vue";
+import FestivalImageMapLayer from "./FestivalImageMapLayer.vue";
+import GeoMapLayer from "./GeoMapLayer.vue";
+import {useMapPosition} from "../composables/useMapPosition";
 
 const props = defineProps({
 	festivalId: {
@@ -35,12 +41,19 @@ const props = defineProps({
 
 const festival = ref(null);
 const layers = ref([]);
+const activeLayers = computed(() =>
+	layers.value.filter((layer) => layer.is_active),
+);
 const pins = ref([]);
 const activeLayerId = ref(null);
 
-const activeLayer = computed(
-	() => layers.value.find((l) => l.id === activeLayerId.value) ?? null,
+const {currentGeo, setCurrentGeo} = useMapPosition();
+
+const isFestivalImageLayer = computed(
+	() => activeLayerId.value === "festival-image",
 );
+
+const isGeoMapLayer = computed(() => activeLayerId.value === "geo-map");
 
 async function apiFetch(path, options = {}) {
 	const response = await fetch(`${props.apiBase}${path}`, {
@@ -62,9 +75,9 @@ async function loadFestival() {
 
 async function loadLayers() {
 	layers.value = await apiFetch(`/festivals/${props.festivalId}/layers`);
-	if (!activeLayerId.value && layers.value.length) {
-		activeLayerId.value =
-			layers.value.find((l) => l.is_active)?.id ?? layers.value[0].id;
+
+	if (!activeLayerId.value && activeLayers.value.length) {
+		activeLayerId.value = activeLayers.value[0].id;
 	}
 }
 
@@ -73,7 +86,27 @@ async function loadPins() {
 }
 
 async function onLayerSwitch(layerId) {
+	console.log("[FestivalMap] switching layer", {
+		from: activeLayerId.value,
+		to: layerId,
+		currentGeo: currentGeo.value,
+	});
+
 	activeLayerId.value = layerId;
+}
+
+function onPositionChanged(geo) {
+	function onPositionChanged(geo) {
+		console.log("[FestivalMap] position changed", {
+			activeLayer: activeLayerId.value,
+			latitude: Number(geo.latitude),
+			longitude: Number(geo.longitude),
+		});
+
+		setCurrentGeo(geo.latitude, geo.longitude);
+	}
+
+	setCurrentGeo(geo.latitude, geo.longitude);
 }
 
 async function onPinDropped({pixelX, pixelY}) {

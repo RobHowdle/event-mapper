@@ -11,7 +11,7 @@ use FestivalMapper\ValueObjects\GeoCoordinate;
  * Displays the uploaded festival map image.
  *
  * Returns the pixel position for the given geographic coordinate so the
- *  * frontend Vue component can render the pin at the correct location.
+ *  frontend Vue component can render the pin at the correct location.
  */
 class FestivalImageLayer implements LayerInterface
 {
@@ -30,7 +30,7 @@ class FestivalImageLayer implements LayerInterface
         return 'Festival Map';
     }
 
-    public function getData(GeoCoordinate $coordinate): array
+    public function getData(Festival $festival, GeoCoordinate $coordinate): array
     {
         $pixel = $this->coordinateEngine->geoToPixel($this->festival, $coordinate);
         return [
@@ -44,7 +44,7 @@ class FestivalImageLayer implements LayerInterface
     public function render(): array
     {
         return [
-            'component' => 'FestivalImageLayer',
+            'component' => 'FestivalImageMapLayer',
         ];
     }
 }

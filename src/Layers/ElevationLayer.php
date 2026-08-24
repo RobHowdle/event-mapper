@@ -5,6 +5,7 @@ namespace FestivalMapper\Layers;
 use FestivalMapper\Contracts\ElevationProviderInterface;
 use FestivalMapper\Contracts\LayerInterface;
 use FestivalMapper\ValueObjects\GeoCoordinate;
+use FestivalMapper\Models\Festival;
 
 class ElevationLayer implements LayerInterface
 {
@@ -12,7 +13,24 @@ class ElevationLayer implements LayerInterface
         private readonly ElevationProviderInterface $provider,
     ) {}
 
-    public function getData(GeoCoordinate $coordinate): array
+    public function id(): string
+    {
+        return 'elevation';
+    }
+
+    public function name(): string
+    {
+        return 'Topography';
+    }
+
+    public function render(): array
+    {
+        return [
+            'component' => 'ElevationLayer',
+        ];
+    }
+
+    public function getData(Festival $festival, GeoCoordinate $coordinate): array
     {
         return [
             'elevation' => $this->provider->getElevation($coordinate),

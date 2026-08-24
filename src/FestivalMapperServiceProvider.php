@@ -3,11 +3,14 @@
 namespace FestivalMapper;
 
 use Illuminate\Support\ServiceProvider;
+
 use FestivalMapper\Contracts\CoordinateTransformerInterface;
 use FestivalMapper\Transforms\AffineTransformer;
 use FestivalMapper\Engines\CoordinateEngine;
 use FestivalMapper\Engines\LayerEngine;
 use FestivalMapper\Engines\PinEngine;
+use FestivalMapper\Layers\FestivalImageLayer;
+use FestivalMapper\Layers\GeoMapLayer;
 
 class FestivalMapperServiceProvider extends ServiceProvider
 {
@@ -44,5 +47,15 @@ class FestivalMapperServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
         $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+
+        $layerEngine = $this->app->make(LayerEngine::class);
+
+        $layerEngine->register(
+            $this->app->make(FestivalImageLayer::class)
+        );
+
+        $layerEngine->register(
+            $this->app->make(GeoMapLayer::class)
+        );
     }
 }

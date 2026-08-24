@@ -77,6 +77,10 @@ class FestivalController extends Controller
 
     public function destroy(Festival $festival): JsonResponse
     {
+        $festival->calibrationPoints()->delete();
+        $festival->mapLayers()->delete();
+        $festival->pins()->delete();
+
         $festival->delete();
 
         return response()->json(null, 204);

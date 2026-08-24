@@ -216,8 +216,8 @@
 						<div>
 							<h2>Calibration Points</h2>
 							<p>
-								Add at least two anchor points to align image
-								pixels with geographic coordinates.
+								Match locations on your festival artwork with
+								their real-world locations.
 							</p>
 						</div>
 					</div>
@@ -225,110 +225,239 @@
 					<div
 						v-if="!selectedFestivalId"
 						class="festival-admin__empty-state">
-						Create a festival first to manage calibration points.
+						Create a festival first to calibrate its map.
 					</div>
 
-					<div v-else class="festival-admin__stack">
-						<form
-							class="festival-admin__stack"
-							@submit.prevent="createCalibrationPoint">
+					<div
+						v-else-if="!activeFestival?.map_image_url"
+						class="festival-admin__empty-state">
+						Upload the festival map before adding calibration
+						points.
+					</div>
+
+					<div v-else class="festival-admin__calibration">
+						<div class="festival-admin__calibration-instructions">
+							<strong>How calibration works</strong>
+
+							<p>
+								Click a location on the festival map, then click
+								the exact same location on the real-world map.
+								Repeat this for at least two locations.
+							</p>
+
 							<div
-								class="festival-admin__split festival-admin__split--four">
-								<label class="festival-admin__field">
-									<span>Pixel X</span>
-									<input
-										v-model.number="calibrationForm.pixel_x"
-										type="number"
-										step="any"
-										required />
-								</label>
+								class="festival-admin__calibration-status"
+								:class="{
+									'festival-admin__calibration-status--complete':
+										calibrationSelection.pixel &&
+										calibrationSelection.geo,
+								}">
+								<span>
+									1.
+									{{
+										calibrationSelection.pixel
+											? "Festival location selected"
+											: "Select a location on the festival map"
+									}}
+								</span>
 
-								<label class="festival-admin__field">
-									<span>Pixel Y</span>
-									<input
-										v-model.number="calibrationForm.pixel_y"
-										type="number"
-										step="any"
-										required />
-								</label>
+								<span>
+									2.
+									{{
+										calibrationSelection.geo
+											? "Real-world location selected"
+											: "Select the matching location on the real map"
+									}}
+								</span>
 
-								<label class="festival-admin__field">
-									<span>Latitude</span>
-									<input
-										v-model.number="
-											calibrationForm.latitude
+								<button
+									v-if="
+										calibrationSelection.pixel ||
+										calibrationSelection.geo
+									"
+									type="button"
+									class="festival-admin__calibration-cancel"
+									@click="resetCalibrationSelection">
+									Cancel new point
+								</button>
+							</div>
+							Okay be
+						</div>
+
+						<div class="festival-admin__calibration-maps">
+							<div class="festival-admin__calibration-map-panel">
+								<div
+									class="festival-admin__calibration-map-header">
+									<div>
+										<strong>Festival Map</strong>
+										<small>
+											Click the matching location on your
+											artwork.
+										</small>
+									</div>
+								</div>
+
+								<div
+									ref="festivalMapContainer"
+									class="festival-admin__festival-map"
+									@click="handleFestivalMapClick">
+									<img
+										:src="activeFestival.map_image_url"
+										:alt="`${activeFestival.name} map`"
+										class="festival-admin__calibration-image" />
+
+									<button
+										v-for="point in calibrationPoints"
+										:key="`festival-point-${point.id}`"
+										type="button"
+										class="festival-admin__calibration-marker"
+										:style="{
+											left: `${(Number(point.pixel_x) / Number(activeFestival.map_width)) * 100}%`,
+											top: `${(Number(point.pixel_y) / Number(activeFestival.map_height)) * 100}%`,
+										}"
+										:title="
+											point.label || 'Calibration point'
 										"
-										type="number"
-										step="any"
-										min="-90"
-										max="90"
-										required />
-								</label>
+										@click.stop>
+										<span>{{
+											point.label || point.id
+										}}</span>
+									</button>
 
-								<label class="festival-admin__field">
-									<span>Longitude</span>
-									<input
-										v-model.number="
-											calibrationForm.longitude
-										"
-										type="number"
-										step="any"
-										min="-180"
-										max="180"
-										required />
-								</label>
+									<div
+										v-if="calibrationSelection.pixel"
+										class="festival-admin__calibration-marker festival-admin__calibration-marker--pending"
+										:style="{
+											left: `${(calibrationSelection.pixel.x / Number(activeFestival.map_width)) * 100}%`,
+											top: `${(calibrationSelection.pixel.y / Number(activeFestival.map_height)) * 100}%`,
+										}">
+										<span>New point</span>
+									</div>
+								</div>
+							</div>
+
+							<div class="festival-admin__calibration-map-header">
+								<div>
+									<strong>Real World Map</strong>
+									<small>
+										{{
+											calibrationSelection.pixel &&
+											!calibrationSelection.geo
+												? "Click once to place the matching real-world point."
+												: "Pan and zoom to find the matching location."
+										}}
+									</small>
+								</div>
+							</div>
+
+							<div
+								ref="realMapContainer"
+								class="festival-admin__real-map"></div>
+						</div>
+
+						<div
+							v-if="
+								calibrationSelection.pixel ||
+								calibrationSelection.geo
+							"
+							class="festival-admin__calibration-form">
+							<div class="festival-admin__calibration-selection">
+								<div>
+									<strong>Festival location</strong>
+
+									<small v-if="calibrationSelection.pixel">
+										Pixel
+										{{
+											Math.round(
+												calibrationSelection.pixel.x,
+											)
+										}},
+										{{
+											Math.round(
+												calibrationSelection.pixel.y,
+											)
+										}}
+									</small>
+
+									<small v-else> Not selected yet </small>
+								</div>
+
+								<div>
+									<strong>Real-world location</strong>
+
+									<small v-if="calibrationSelection.geo">
+										Location selected
+									</small>
+
+									<small v-else> Not selected yet </small>
+								</div>
 							</div>
 
 							<label class="festival-admin__field">
 								<span>Label</span>
+
 								<input
 									v-model.trim="calibrationForm.label"
 									type="text"
-									placeholder="Top-left corner" />
+									placeholder="Main Stage" />
 							</label>
 
 							<div class="festival-admin__actions">
 								<button
-									class="festival-admin__primary-button"
-									type="submit"
-									:disabled="isSaving">
-									Add Point
+									type="button"
+									class="festival-admin__secondary-button"
+									@click="resetCalibrationSelection">
+									Reset Selection
 								</button>
-							</div>
-						</form>
-
-						<ul
-							v-if="calibrationPoints.length"
-							class="festival-admin__list">
-							<li
-								v-for="point in calibrationPoints"
-								:key="point.id"
-								class="festival-admin__list-item">
-								<div>
-									<strong>
-										{{ point.label || "Untitled point" }}
-									</strong>
-
-									<small>
-										Pixel {{ point.pixel_x }},
-										{{ point.pixel_y }} | Geo
-										{{ point.latitude }},
-										{{ point.longitude }}
-									</small>
-								</div>
 
 								<button
 									type="button"
-									class="festival-admin__text-button"
-									@click="deleteCalibrationPoint(point.id)">
-									Delete
+									class="festival-admin__primary-button"
+									:disabled="
+										isSaving ||
+										!calibrationSelection.pixel ||
+										!calibrationSelection.geo
+									"
+									@click="saveCalibrationPoint">
+									Save Calibration Point
 								</button>
-							</li>
-						</ul>
+							</div>
+						</div>
 
-						<p v-else class="festival-admin__empty-state">
-							No calibration points added yet.
-						</p>
+						<div
+							v-if="calibrationPoints.length"
+							class="festival-admin__calibration-points">
+							<h3>Existing Calibration Points</h3>
+
+							<ul class="festival-admin__list">
+								<li
+									v-for="point in calibrationPoints"
+									:key="point.id"
+									class="festival-admin__list-item">
+									<div>
+										<strong>
+											{{
+												point.label || "Untitled point"
+											}}
+										</strong>
+
+										<small>
+											Pixel {{ point.pixel_x }},
+											{{ point.pixel_y }}
+										</small>
+									</div>
+
+									<button
+										type="button"
+										class="festival-admin__text-button"
+										@click="
+											deleteCalibrationPoint(point.id)
+										">
+										Delete
+									</button>
+								</li>
+							</ul>
+						</div>
 					</div>
 				</section>
 
@@ -481,7 +610,9 @@
 </template>
 
 <script setup>
-import {computed, onMounted, ref, watch} from "vue";
+import {computed, nextTick, onMounted, ref, watch} from "vue";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 const props = defineProps({
 	title: {
@@ -520,6 +651,228 @@ const isSaving = ref(false);
 const statusMessage = ref("");
 const errorMessage = ref("");
 const mapFile = ref(null);
+
+const festivalMapContainer = ref(null);
+const realMapContainer = ref(null);
+
+const realMap = ref(null);
+const pendingRealMarker = ref(null);
+const savedRealMarkers = ref([]);
+
+const calibrationSelection = ref({
+	pixel: null,
+	geo: null,
+});
+
+async function initialiseRealMap() {
+	await nextTick();
+
+	if (!realMapContainer.value) {
+		return;
+	}
+
+	if (realMap.value) {
+		realMap.value.remove();
+		realMap.value = null;
+	}
+
+	realMap.value = L.map(realMapContainer.value).setView([54.5, -1.5], 6);
+
+	L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+		attribution:
+			'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+		maxZoom: 19,
+	}).addTo(realMap.value);
+
+	realMap.value.on("click", handleRealMapClick);
+
+	renderSavedRealMarkers();
+
+	if (calibrationPoints.value.length) {
+		const bounds = L.latLngBounds(
+			calibrationPoints.value.map((point) => [
+				Number(point.latitude),
+				Number(point.longitude),
+			]),
+		);
+
+		realMap.value.fitBounds(bounds, {
+			padding: [40, 40],
+			maxZoom: 17,
+		});
+	}
+}
+
+function renderSavedRealMarkers() {
+	if (!realMap.value) {
+		return;
+	}
+
+	savedRealMarkers.value.forEach((marker) => {
+		marker.remove();
+	});
+
+	savedRealMarkers.value = [];
+
+	calibrationPoints.value.forEach((point) => {
+		const latitude = Number(point.latitude);
+		const longitude = Number(point.longitude);
+
+		if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+			return;
+		}
+
+		const marker = L.circleMarker([latitude, longitude], {
+			radius: 6,
+			weight: 2,
+			fillOpacity: 0.85,
+		})
+			.addTo(realMap.value)
+			.bindTooltip(point.label || `Point ${point.id}`, {
+				direction: "top",
+				offset: [0, -8],
+			});
+
+		savedRealMarkers.value.push(marker);
+	});
+}
+
+function handleFestivalMapClick(event) {
+	if (!festivalMapContainer.value || !activeFestival.value) {
+		return;
+	}
+
+	const rect = festivalMapContainer.value.getBoundingClientRect();
+
+	const displayX = event.clientX - rect.left;
+	const displayY = event.clientY - rect.top;
+
+	const imageWidth = activeFestival.value.map_width || rect.width;
+
+	const imageHeight = activeFestival.value.map_height || rect.height;
+
+	const x = (displayX / rect.width) * imageWidth;
+	const y = (displayY / rect.height) * imageHeight;
+
+	calibrationSelection.value.pixel = {
+		x,
+		y,
+		displayX,
+		displayY,
+	};
+}
+
+function handleRealMapClick(event) {
+	// Do not allow a real-world point until a festival-map  point has been selected first.
+	if (!calibrationSelection.value.pixel) {
+		return;
+	}
+
+	const {lat, lng} = event.latlng;
+
+	calibrationSelection.value.geo = {
+		latitude: lat,
+		longitude: lng,
+	};
+
+	if (pendingRealMarker.value) {
+		pendingRealMarker.value.remove();
+	}
+
+	pendingRealMarker.value = L.circleMarker([lat, lng], {
+		radius: 7,
+		weight: 3,
+		fillOpacity: 1,
+	})
+		.addTo(realMap.value)
+		.bindTooltip("New point", {
+			permanent: true,
+			direction: "top",
+			offset: [0, -10],
+		})
+		.openTooltip();
+
+	// Point has now been selected, so give normal map
+	// navigation back to the user.
+	realMap.value.dragging.enable();
+	realMap.value.scrollWheelZoom.enable();
+	realMap.value.doubleClickZoom.enable();
+}
+
+async function saveCalibrationPoint() {
+	if (
+		!selectedFestivalId.value ||
+		!calibrationSelection.value.pixel ||
+		!calibrationSelection.value.geo
+	) {
+		return;
+	}
+
+	isSaving.value = true;
+	clearMessages();
+
+	try {
+		const point = await apiFetch(
+			`/festivals/${selectedFestivalId.value}/calibration`,
+			{
+				method: "POST",
+				body: JSON.stringify({
+					pixel_x: calibrationSelection.value.pixel.x,
+					pixel_y: calibrationSelection.value.pixel.y,
+					latitude: calibrationSelection.value.geo.latitude,
+					longitude: calibrationSelection.value.geo.longitude,
+					label: calibrationForm.value.label || null,
+				}),
+			},
+		);
+
+		calibrationPoints.value = [...calibrationPoints.value, point];
+
+		resetCalibrationSelection();
+
+		setStatus("Calibration point added.");
+	} catch (error) {
+		setError(error);
+	} finally {
+		isSaving.value = false;
+	}
+}
+
+function resetCalibrationSelection() {
+	calibrationSelection.value = {
+		pixel: null,
+		geo: null,
+	};
+
+	calibrationForm.value = createCalibrationForm();
+
+	if (pendingRealMarker.value) {
+		pendingRealMarker.value.remove();
+		pendingRealMarker.value = null;
+	}
+}
+
+// function pixelToDisplayX(x) {
+// 	if (!festivalMapContainer.value || !activeFestival.value?.map_width) {
+// 		return x;
+// 	}
+
+// 	return (
+// 		(x / activeFestival.value.map_width) *
+// 		festivalMapContainer.value.clientWidth
+// 	);
+// }
+
+// function pixelToDisplayY(y) {
+// 	if (!festivalMapContainer.value || !activeFestival.value?.map_height) {
+// 		return y;
+// 	}
+
+// 	return (
+// 		(y / activeFestival.value.map_height) *
+// 		festivalMapContainer.value.clientHeight
+// 	);
+// }
 
 const festivalForm = ref(createFestivalForm());
 const calibrationForm = ref(createCalibrationForm());
@@ -597,6 +950,43 @@ watch(
 			loadFestivalWorkspace(newFestivalId);
 		}
 	},
+);
+
+watch(activeSection, async (section) => {
+	if (section === "calibration" && selectedFestivalId.value) {
+		await initialiseRealMap();
+	}
+});
+
+watch(
+	() => calibrationSelection.value.pixel,
+	(pixel) => {
+		if (!realMap.value) {
+			return;
+		}
+
+		if (pixel) {
+			// Festival point has been chosen:
+			// turn the real map into "pick a point" mode.
+			realMap.value.dragging.disable();
+			realMap.value.scrollWheelZoom.disable();
+			realMap.value.doubleClickZoom.disable();
+		} else {
+			// No festival point selected:
+			// allow normal map navigation.
+			realMap.value.dragging.enable();
+			realMap.value.scrollWheelZoom.enable();
+			realMap.value.doubleClickZoom.enable();
+		}
+	},
+);
+
+watch(
+	calibrationPoints,
+	() => {
+		renderSavedRealMarkers();
+	},
+	{deep: true},
 );
 
 async function apiFetch(path, options = {}) {
@@ -715,10 +1105,14 @@ async function loadFestivalWorkspace(festivalId) {
 
 		activeFestival.value = festival;
 		syncFestivalForm(festival);
-		calibrationPoints.value = festival.calibration_points ?? [];
-		pins.value = festival.pins ?? [];
-		layers.value = await apiFetch(`/festivals/${festivalId}/layers`);
 
+		calibrationPoints.value = await apiFetch(
+			`/festivals/${festivalId}/calibration`,
+		);
+
+		pins.value = await apiFetch(`/festivals/${festivalId}/pins`);
+
+		layers.value = await apiFetch(`/festivals/${festivalId}/layers`);
 		emit("festival-selected", festival);
 	} catch (error) {
 		setError(error);
@@ -815,34 +1209,6 @@ async function uploadMapImage() {
 		await loadFestivalWorkspace(selectedFestivalId.value);
 
 		setStatus("Map image uploaded.");
-	} catch (error) {
-		setError(error);
-	} finally {
-		isSaving.value = false;
-	}
-}
-
-async function createCalibrationPoint() {
-	if (!selectedFestivalId.value) {
-		return;
-	}
-
-	isSaving.value = true;
-	clearMessages();
-
-	try {
-		const point = await apiFetch(
-			`/festivals/${selectedFestivalId.value}/calibration`,
-			{
-				method: "POST",
-				body: JSON.stringify(calibrationForm.value),
-			},
-		);
-
-		calibrationPoints.value = [...calibrationPoints.value, point];
-		calibrationForm.value = createCalibrationForm();
-
-		setStatus("Calibration point added.");
 	} catch (error) {
 		setError(error);
 	} finally {
@@ -1314,5 +1680,189 @@ onMounted(async () => {
 	.festival-admin__list-item {
 		flex-direction: column;
 	}
+}
+
+.festival-admin__calibration {
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+
+.festival-admin__calibration-instructions {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.festival-admin__calibration-instructions p {
+	margin: 0;
+	color: var(--festival-admin-text-muted);
+}
+
+.festival-admin__calibration-status {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
+}
+
+.festival-admin__calibration-status span {
+	padding: 0.6rem 0.8rem;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.05);
+	color: var(--festival-admin-text-muted);
+	font-size: 0.85rem;
+}
+
+.festival-admin__calibration-status--complete span {
+	background: var(--festival-admin-accent-soft);
+	color: var(--festival-admin-text);
+}
+
+.festival-admin__calibration-maps {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 1.5rem;
+}
+
+.festival-admin__calibration-map-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.festival-admin__calibration-map-header {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.festival-admin__calibration-map-header div {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+}
+
+.festival-admin__calibration-map-header small {
+	color: var(--festival-admin-text-muted);
+}
+
+.festival-admin__festival-map {
+	position: relative;
+	width: 100%;
+	overflow: hidden;
+	border: 1px solid var(--festival-admin-border);
+	border-radius: 18px;
+	background: rgba(0, 0, 0, 0.25);
+	cursor: crosshair;
+}
+
+.festival-admin__calibration-image {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.festival-admin__real-map {
+	width: 100%;
+	height: 500px;
+	overflow: hidden;
+	border: 1px solid var(--festival-admin-border);
+	border-radius: 18px;
+}
+
+.festival-admin__calibration-marker {
+	position: absolute;
+	z-index: 5;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 3px solid white;
+	border-radius: 50%;
+	background: var(--festival-admin-accent);
+	transform: translate(-50%, -50%);
+	cursor: default;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.festival-admin__calibration-marker span {
+	position: absolute;
+	top: -2rem;
+	left: 50%;
+	transform: translateX(-50%);
+	white-space: nowrap;
+	padding: 0.3rem 0.5rem;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.8);
+	color: white;
+	font-size: 0.7rem;
+	pointer-events: none;
+}
+
+.festival-admin__calibration-marker--pending {
+	background: #ffffff;
+	border-color: var(--festival-admin-accent);
+	pointer-events: none;
+}
+
+.festival-admin__calibration-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--festival-admin-border);
+	border-radius: 18px;
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.festival-admin__calibration-selection {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.festival-admin__calibration-selection > div {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.festival-admin__calibration-selection small {
+	color: var(--festival-admin-text-muted);
+}
+
+.festival-admin__calibration-points {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.festival-admin__calibration-points h3 {
+	margin: 0;
+	font-size: 1rem;
+}
+
+@media (max-width: 900px) {
+	.festival-admin__calibration-maps {
+		grid-template-columns: 1fr;
+	}
+
+	.festival-admin__calibration-selection {
+		grid-template-columns: 1fr;
+	}
+}
+
+.festival-admin__calibration-cancel {
+	appearance: none;
+	padding: 0.6rem 0.8rem;
+	border: 1px solid rgba(255, 106, 61, 0.35);
+	border-radius: 10px;
+	background: transparent;
+	color: #ffb1a0;
+	font: inherit;
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
 }
 </style>

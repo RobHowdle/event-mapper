@@ -26,14 +26,18 @@ Route::prefix(config('festival-mapper.route_prefix', 'api/festival-mapper'))
         // Calibration points
         Route::get('festivals/{festival}/calibration', [CalibrationController::class, 'index']);
         Route::post('festivals/{festival}/calibration', [CalibrationController::class, 'store']);
-        Route::patch('festivals/{festival}/calibration/{calibrationPoint}', [CalibrationController::class, 'update']);
-        Route::delete('festivals/{festival}/calibration/{calibrationPoint}', [CalibrationController::class, 'destroy']);
+        Route::patch('festivals/{festival}/calibration/{calibrationPoint}', [CalibrationController::class, 'update'])
+            ->scopeBindings();
+        Route::delete('festivals/{festival}/calibration/{calibrationPoint}', [CalibrationController::class, 'destroy'])
+            ->scopeBindings();
 
         // Pins
         Route::get('festivals/{festival}/pins', [PinController::class, 'index']);
         Route::post('festivals/{festival}/pins', [PinController::class, 'store']);
-        Route::patch('festivals/{festival}/pins/{pin}', [PinController::class, 'update']);
-        Route::delete('festivals/{festival}/pins/{pin}', [PinController::class, 'destroy']);
+        Route::patch('festivals/{festival}/pins/{pin}', [PinController::class, 'update'])
+            ->scopeBindings();
+        Route::delete('festivals/{festival}/pins/{pin}', [PinController::class, 'destroy'])
+            ->scopeBindings();
 
         // Layers
         Route::get('festivals/{festival}/layers', [LayerController::class, 'index']);

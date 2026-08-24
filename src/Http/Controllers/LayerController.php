@@ -45,8 +45,8 @@ class LayerController extends Controller
         Festival $festival,
     ): JsonResponse {
         $validated = $request->validate([
-            'latitude'  => ['required', 'numeric'],
-            'longitude' => ['required', 'numeric'],
+            'latitude'  => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
         ]);
 
         $coordinate = new GeoCoordinate(
