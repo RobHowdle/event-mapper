@@ -71,6 +71,39 @@ async function apiFetch(path, options = {}) {
 
 async function loadFestival() {
 	festival.value = await apiFetch(`/festivals/${props.festivalId}`);
+
+	if (
+		!currentGeo.value &&
+		festival.value?.map_width &&
+		festival.value?.map_height
+	) {
+		try {
+			const result = await apiFetch(
+				`/festivals/${props.festivalId}/coordinates/to-geo`,
+				{
+					method: "POST",
+					body: JSON.stringify({
+						x: festival.value.map_width / 2,
+						y: festival.value.map_height / 2,
+					}),
+				},
+			);
+
+			setCurrentGeo(result.geo.latitude, result.geo.longitude);
+
+			console.log("[FestivalMap] initial position", {
+				pixelX: festival.value.map_width / 2,
+				pixelY: festival.value.map_height / 2,
+				latitude: result.geo.latitude,
+				longitude: result.geo.longitude,
+			});
+		} catch (error) {
+			console.error(
+				"[FestivalMap] failed to initialise map position",
+				error,
+			);
+		}
+	}
 }
 
 async function loadLayers() {
@@ -137,7 +170,9 @@ async function onPinDeleted(pin) {
 }
 
 onMounted(async () => {
-	await Promise.all([loadFestival(), loadLayers(), loadPins()]);
+	await loadFestival();
+	await loadLayers();
+	await loadPins();
 });
 </script>
 
