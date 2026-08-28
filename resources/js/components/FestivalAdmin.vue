@@ -242,7 +242,8 @@
 							<p>
 								Click a location on the festival map, then click
 								the exact same location on the real-world map.
-								Repeat this for at least two locations.
+								Repeat this for at least two locations, three or
+								more would be best.
 							</p>
 
 							<div
