@@ -13,6 +13,7 @@ import {nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch} from "vue"
 
 import L from "leaflet";
 import {drawPins} from "../utils/mapPins";
+import {terrainOverlay} from '../utils/terrainOverlay';
 import {artworkOverlay} from "../utils/artworkOverlay";
 import "leaflet/dist/leaflet.css";
 
@@ -22,6 +23,8 @@ const props = defineProps({
  selectable:{type:Boolean,default:false},
  selectionGeo:{type:Object,default:null},
  topography:{type:Boolean,default:false},
+ terrain:{type:Object,default:null},
+ terrainOpacity:{type:Number,default:.65},
  tileUrl:{type:String,default:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'},
  tileMaxZoom:{type:Number,default:17},
  apiBase:{type:String,default:'/api/festival-mapper'},
@@ -40,7 +43,7 @@ const emit = defineEmits(["position-changed", "pin-selected", "location-picked"]
 
 const mapElement = ref(null);
 const map = shallowRef(null);
-let tiles; let image; let pinGroup; let selectionMarker; let grid; let gridTimer; let gridRequest=0;
+let terrainImage; let tiles; let image; let pinGroup; let selectionMarker; let grid; let gridTimer; let gridRequest=0;
 
 const isSyncing = ref(false);
 
@@ -68,7 +71,7 @@ async function initialiseMap() {
 
 	map.value.on("moveend", handleMapMoved);
     map.value.on('click', event => { if(props.selectable && props.active) emit('location-picked',{latitude:event.latlng.lat,longitude:event.latlng.lng}); });
-    renderArtwork(); renderPins(); renderSelection(); scheduleGrid();
+    renderArtwork(); renderTerrain(); renderPins(); renderSelection(); scheduleGrid();
 }
 
 function handleMapMoved() {
@@ -124,9 +127,16 @@ function renderArtwork() {
         image=artworkOverlay(map.value,props.festival,props.corners);
         image.setOpacity(props.artworkOpacity);
     }
+    renderTerrain();
     // Pins are rendered last so the artwork never covers them.
     renderPins();
 }
+function renderTerrain() {
+    terrainImage?.remove(); terrainImage=null;
+    if(map.value && props.terrain) terrainImage=terrainOverlay(map.value,props.terrain,props.terrainOpacity);
+}
+watch(()=>props.terrain,renderTerrain);
+watch(()=>props.terrainOpacity,value=>terrainImage?.setOpacity(value));
 function renderPins() {
     if(!map.value) return;
     pinGroup?.remove();

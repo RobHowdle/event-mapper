@@ -10,6 +10,9 @@ export function artworkOverlay(map, festival, corners) {
     const width = Number(festival.map_width), height = Number(festival.map_height);
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
+    // Leaflet gives pane SVGs z-index 200 by default. Keep artwork below
+    // elevation raster images while vector pins remain above both.
+    svg.style.zIndex = '0';
     svg.setAttribute('viewBox', `0 0 ${maxX-minX} ${maxY-minY}`);
     const image = document.createElementNS(ns, 'image');
     image.setAttribute('href', festival.map_image_url || `/storage/${festival.map_image_path}`);

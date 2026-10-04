@@ -72,4 +72,23 @@ class LocationInfoTest extends TestCase
         $this->getJson($path)->assertOk();
         Http::assertSentCount(1);
     }
+    public function test_host_can_supply_a_remote_provider_without_a_local_key(): void
+    {
+        config(['festival-mapper.what3words.key' => null, 'festival-mapper.elevation.enabled' => false]);
+        $this->app->instance(\FestivalMapper\Contracts\What3WordsProvider::class, new class implements \FestivalMapper\Contracts\What3WordsProvider {
+            public function enabled(): bool { return true; }
+            public function address(float $latitude, float $longitude): array
+            {
+                return ['words' => 'filled.count.soap', 'url' => 'https://what3words.com/filled.count.soap'];
+            }
+            public function grid(array $bounds): array { return ['lines' => []]; }
+        });
+        $this->getJson('/api/festival-mapper/location-info/settings')->assertOk()->assertJsonPath('what3words_enabled', true);
+        $this->getJson('/api/festival-mapper/location-info/point?latitude=52.83&longitude=-1.39')
+            ->assertOk()->assertJsonPath('what3words.words', 'filled.count.soap');
+        $this->getJson('/api/festival-mapper/location-info/grid?south=52.83&north=52.8301&west=-1.39&east=-1.3899')
+            ->assertOk()->assertJsonPath('lines', []);
+        Http::assertNothingSent();
+    }
+
 }

@@ -29,6 +29,8 @@ Route::prefix(config('festival-mapper.route_prefix', 'api/festival-mapper'))
         Route::post('festivals/{festival}/coordinates/to-pixel', [CoordinateController::class, 'toPixel']);
         Route::post('festivals/{festival}/coordinates/to-geo', [CoordinateController::class, 'toGeo']);
 
+        Route::get('festivals/{festival}/terrain', [\FestivalMapper\Http\Controllers\TerrainController::class, 'show'])->middleware('throttle:20,1');
+
         // Calibration points
         Route::get('festivals/{festival}/calibration', [CalibrationController::class, 'index']);
         Route::post('festivals/{festival}/calibration', [CalibrationController::class, 'store']);

@@ -23,6 +23,7 @@ class FestivalMapperServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(CoordinateTransformerInterface::class, AffineTransformer::class);
+        $this->app->bind(\FestivalMapper\Contracts\What3WordsProvider::class, \FestivalMapper\Services\DirectWhat3WordsProvider::class);
 
         $this->app->singleton(CoordinateEngine::class);
         $this->app->singleton(LayerEngine::class);
