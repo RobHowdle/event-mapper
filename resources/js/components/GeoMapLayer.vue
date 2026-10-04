@@ -9,29 +9,39 @@
 </template>
 
 <script setup>
-import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch} from "vue";
 
 import L from "leaflet";
+import {drawPins} from "../utils/mapPins";
+import {artworkOverlay} from "../utils/artworkOverlay";
 import "leaflet/dist/leaflet.css";
 
 const props = defineProps({
+ active: {type:Boolean,default:true},
+ pins: {type:Array,default:()=>[]},
+ selectable:{type:Boolean,default:false},
+ festival:{type:Object,default:null},
+ corners:{type:Array,default:()=>[]},
+ artworkOpacity:{type:Number,default:0},
+ streetOpacity:{type:Number,default:1},
 	currentGeo: {
 		type: Object,
 		default: null,
 	},
 });
 
-const emit = defineEmits(["position-changed"]);
+const emit = defineEmits(["position-changed", "pin-selected", "location-picked"]);
 
 const mapElement = ref(null);
-const map = ref(null);
+const map = shallowRef(null);
+let tiles; let image; let pinGroup;
 
 const isSyncing = ref(false);
 
 async function initialiseMap() {
 	await nextTick();
 
-	if (!mapElement.value || map.value) {
+	if (!props.active || !mapElement.value || map.value) {
 		return;
 	}
 
@@ -43,36 +53,23 @@ async function initialiseMap() {
 		zoomControl: true,
 	}).setView(initialPosition, props.currentGeo ? 16 : 6);
 
-	console.log("[GeoMapLayer] initialised", {
-		currentGeo: props.currentGeo,
-		centre: map.value.getCenter(),
-		zoom: map.value.getZoom(),
-	});
-
-	L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+	tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 		attribution:
 			'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 		maxZoom: 19,
+        opacity:props.streetOpacity,
 	}).addTo(map.value);
 
 	map.value.on("moveend", handleMapMoved);
+    map.value.on('click', event => { if(props.selectable && props.active) emit('location-picked',{latitude:event.latlng.lat,longitude:event.latlng.lng}); });
+    renderArtwork(); renderPins();
 }
 
 function handleMapMoved() {
-	if (!map.value) {
-		return;
-	}
+	if (!map.value || !props.active || isSyncing.value) return;
 
-	if (isSyncing.value) {
-		isSyncing.value = false;
-		return;
-	}
 
 	const centre = map.value.getCenter();
-	console.log("[GeoMapLayer] user moved map", {
-		centre,
-		zoom: map.value.getZoom(),
-	});
 	emit("position-changed", {
 		latitude: centre.lat,
 		longitude: centre.lng,
@@ -95,11 +92,8 @@ function moveToGeo(geo) {
 	}
 
 	isSyncing.value = true;
-	console.log("[GeoMapLayer] user moved map", {
-		centre,
-		zoom: map.value.getZoom(),
-	});
-	map.value.panTo([Number(geo.latitude), Number(geo.longitude)]);
+	map.value.panTo([Number(geo.latitude), Number(geo.longitude)], {animate:false});
+    isSyncing.value = false;
 }
 
 watch(
@@ -116,6 +110,31 @@ watch(
 	},
 );
 
+function renderArtwork() {
+    if (!map.value) return;
+    image?.remove(); image=null;
+    if(props.festival && props.corners.length===3) {
+        image=artworkOverlay(map.value,props.festival,props.corners);
+        image.setOpacity(props.artworkOpacity);
+    }
+    // Pins are rendered last so the artwork never covers them.
+    renderPins();
+}
+function renderPins() {
+    if(!map.value) return;
+    pinGroup?.remove();
+    const color=getComputedStyle(mapElement.value).getPropertyValue('--system-color-primary').trim() || '#6366f1';
+    pinGroup=drawPins(map.value,props.pins,pin=>[Number(pin.latitude),Number(pin.longitude)],pin=>emit('pin-selected',pin),color);
+}
+watch(() => props.pins,renderPins,{deep:true});
+watch(() => props.corners,renderArtwork,{deep:true});
+watch(() => props.artworkOpacity,opacity=>image?.setOpacity(opacity));
+watch(() => props.streetOpacity,opacity=>tiles?.setOpacity(opacity));
+watch(() => props.active,async active=>{
+    if(!active) return;
+    await initialiseMap(); await nextTick(); map.value?.invalidateSize({pan:false});
+    if(props.currentGeo) moveToGeo(props.currentGeo);
+});
 onMounted(initialiseMap);
 
 onBeforeUnmount(() => {
@@ -130,9 +149,9 @@ onBeforeUnmount(() => {
 .geo-map-layer {
 	position: relative;
 	width: 100%;
-	height: 650px;
+	height: var(--mapper-map-height, 650px);
 	overflow: hidden;
-	border-radius: 18px;
+	border-radius: 12px;
 	background: rgba(0, 0, 0, 0.25);
 }
 
@@ -188,3 +207,4 @@ onBeforeUnmount(() => {
 	box-shadow: 0 0 3px black;
 }
 </style>
+

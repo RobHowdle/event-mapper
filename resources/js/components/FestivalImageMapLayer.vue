@@ -9,12 +9,16 @@
 </template>
 
 <script setup>
-import {nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch} from "vue";
 
 import L from "leaflet";
+import {drawPins} from "../utils/mapPins";
 import "leaflet/dist/leaflet.css";
 
 const props = defineProps({
+ active: {type: Boolean, default: true},
+ pins: {type: Array, default: () => []},
+ selectable: {type: Boolean, default: false},
 	festival: {
 		type: Object,
 		required: true,
@@ -31,11 +35,12 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["position-changed"]);
+const emit = defineEmits(["position-changed", "pin-selected", "location-picked"]);
 
 const mapElement = ref(null);
-const map = ref(null);
-const imageOverlay = ref(null);
+const map = shallowRef(null);
+const imageOverlay = shallowRef(null);
+let pinGroup; let pinRequest = 0; let positionRequest = 0; let syncRequest = 0;
 
 const isSyncing = ref(false);
 
@@ -76,6 +81,7 @@ async function apiFetch(path, options = {}) {
 async function initialiseMap() {
 	await nextTick();
 
+	if (!props.active) return;
 	if (
 		!mapElement.value ||
 		map.value ||
@@ -123,14 +129,9 @@ async function initialiseMap() {
 	imageOverlay.value = L.imageOverlay(imageUrl, bounds).addTo(map.value);
 
 	map.value.fitBounds(bounds);
-	console.log("[FestivalImageMapLayer] initialised", {
-		currentGeo: props.currentGeo,
-		centre: map.value.getCenter(),
-		zoom: map.value.getZoom(),
-		imageWidth: width,
-		imageHeight: height,
-	});
 	map.value.on("moveend", handleMapMoved);
+    map.value.on("click", pickLocation);
+    await renderPins();
 
 	/*
 	 * If another layer has already
@@ -143,9 +144,7 @@ async function initialiseMap() {
 }
 
 async function handleMapMoved() {
-	if (!map.value) {
-		return;
-	}
+	if (!map.value || !props.active || isSyncing.value) return;
 
 	/*
 	 * If we're moving because another
@@ -153,11 +152,8 @@ async function handleMapMoved() {
 	 * immediately emit the same change
 	 * back again.
 	 */
-	if (isSyncing.value) {
-		isSyncing.value = false;
-		return;
-	}
 
+	const request = ++positionRequest;
 	const centre = map.value.getCenter();
 
 	const pixelX = centre.lng;
@@ -175,12 +171,6 @@ async function handleMapMoved() {
 	if (pixelX < 0 || pixelY < 0 || pixelX > width || pixelY > height) {
 		return;
 	}
-	console.log("[FestivalImageMapLayer] user moved map", {
-		leafletCentre: centre,
-		pixelX,
-		pixelY,
-		zoom: map.value.getZoom(),
-	});
 	try {
 		const result = await apiFetch(
 			`/festivals/${props.festival.id}/coordinates/to-geo`,
@@ -193,13 +183,14 @@ async function handleMapMoved() {
 			},
 		);
 
-		emit("position-changed", result.geo);
+		if (request === positionRequest && props.active && map.value) emit("position-changed", result.geo);
 	} catch (error) {
 		console.error("Failed to resolve festival map position:", error);
 	}
 }
 
 async function moveToGeo(geo) {
+    const request = ++syncRequest;
 	if (!map.value || !geo) {
 		return;
 	}
@@ -216,17 +207,10 @@ async function moveToGeo(geo) {
 			},
 		);
 
-		console.log("[FestivalImageMapLayer] syncing to currentGeo", {
-			latitude: Number(geo.latitude),
-			longitude: Number(geo.longitude),
-			pixelX: Number(result.pixel.x),
-			pixelY: Number(result.pixel.y),
-			zoom: map.value.getZoom(),
-		});
-
-		isSyncing.value = true;
-
-		map.value.panTo([-result.pixel.y, result.pixel.x]);
+		if (!map.value || request !== syncRequest) return;
+        isSyncing.value = true;
+        map.value.panTo([-result.pixel.y, result.pixel.x], {animate: false});
+        isSyncing.value = false;
 	} catch (error) {
 		console.error(
 			"Failed to move festival map to geographic position:",
@@ -249,9 +233,38 @@ watch(
 	},
 );
 
+async function renderPins() {
+    if (!map.value) return;
+    const request = ++pinRequest;
+    const located = await Promise.all(props.pins.map(async pin => {
+        try {
+            const result = await apiFetch(`/festivals/${props.festival.id}/coordinates/to-pixel`, {method:'POST', body:JSON.stringify({latitude:pin.latitude,longitude:pin.longitude})});
+            return {...pin, position:[-Number(result.pixel.y),Number(result.pixel.x)]};
+        } catch { return {...pin,position:null}; }
+    }));
+    if (request !== pinRequest || !map.value) return;
+    pinGroup?.remove();
+    const color = getComputedStyle(mapElement.value).getPropertyValue('--system-color-primary').trim() || '#6366f1';
+    pinGroup = drawPins(map.value, located, pin => pin.position, pin => emit('pin-selected',pin), color);
+}
+async function pickLocation(event) {
+    if (!props.selectable || !props.active) return;
+    try {
+        const result = await apiFetch(`/festivals/${props.festival.id}/coordinates/to-geo`, {method:'POST',body:JSON.stringify({x:event.latlng.lng,y:-event.latlng.lat})});
+        emit('location-picked', result.geo);
+    } catch (error) { console.error('Could not select location', error); }
+}
+watch(() => props.pins, renderPins, {deep:true});
+watch(() => props.active, async active => {
+    if (!active) {positionRequest++; return;}
+    await initialiseMap(); await nextTick();
+    map.value?.invalidateSize({pan:false});
+    if (props.currentGeo) await moveToGeo(props.currentGeo);
+});
 onMounted(initialiseMap);
 
 onBeforeUnmount(() => {
+	pinRequest++; positionRequest++; syncRequest++;
 	if (map.value) {
 		map.value.remove();
 		map.value = null;
@@ -265,9 +278,9 @@ onBeforeUnmount(() => {
 .festival-image-layer {
 	position: relative;
 	width: 100%;
-	height: 650px;
+	height: var(--mapper-map-height, 650px);
 	overflow: hidden;
-	border-radius: 18px;
+	border-radius: 12px;
 	background: rgba(0, 0, 0, 0.25);
 }
 
@@ -323,3 +336,4 @@ onBeforeUnmount(() => {
 	box-shadow: 0 0 3px black;
 }
 </style>
+

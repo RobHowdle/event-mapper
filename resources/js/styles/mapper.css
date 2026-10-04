@@ -1,0 +1,13 @@
+.mapper-ui { --mapper-accent: var(--system-color-primary, #6366f1); --mapper-on-accent: var(--system-on-primary, #fff); color: var(--system-text-primary, #fff); }
+.mapper-ui button, .mapper-ui input, .mapper-ui select, .mapper-ui textarea { font: inherit; }
+.mapper-ui .mapper-button { min-height: 44px; padding: 10px 14px; border-radius: 9px; border: 1px solid var(--mapper-accent); color: var(--mapper-accent); font-weight: 600; background: transparent; }
+.mapper-ui .mapper-button[aria-pressed="true"], .mapper-ui .mapper-primary { background: var(--mapper-accent); color: var(--mapper-on-accent); }
+.mapper-ui button:focus-visible, .mapper-ui input:focus-visible, .mapper-ui select:focus-visible, .mapper-ui textarea:focus-visible { outline: 2px solid var(--mapper-accent); outline-offset: 2px; }
+.mapper-ui input[type="range"] { accent-color: var(--mapper-accent); width: 100%; min-height: 32px; }
+.mapper-ui .mapper-input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 9px; background: rgba(0,0,0,.25); color: inherit; }
+.mapper-ui select option { background: #22252b; color: #fff; }
+.mapper-ui .leaflet-container { font-family: inherit; background: #252830; }
+.mapper-ui .leaflet-control-zoom a { color: #18202b; }
+.mapper-ui .leaflet-control-attribution { color: #222; }
+.mapper-ui .leaflet-container a { color: #225f97; }
+.mapper-ui .leaflet-tooltip { color: #20252b; }

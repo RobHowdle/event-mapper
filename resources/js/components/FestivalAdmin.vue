@@ -1,8 +1,8 @@
 <template>
-	<section class="festival-admin" :style="themeStyles">
-		<header class="festival-admin__hero">
+	<section class="festival-admin mapper-ui" :style="themeStyles">
+		<header class="festival-admin__hero liquid-glass">
 			<div>
-				<p class="festival-admin__eyebrow">Festival Mapper</p>
+				<p class="festival-admin__eyebrow">Event Map Builder</p>
 				<h1>{{ title }}</h1>
 				<p class="festival-admin__subtitle">{{ subtitle }}</p>
 			</div>
@@ -74,7 +74,7 @@
 			<div class="festival-admin__panel">
 				<section
 					v-if="activeSection === 'festival'"
-					class="festival-admin__surface">
+					class="festival-admin__surface liquid-glass">
 					<div class="festival-admin__surface-header">
 						<div>
 							<h2>Festival Settings</h2>
@@ -142,7 +142,7 @@
 
 				<section
 					v-else-if="activeSection === 'map'"
-					class="festival-admin__surface">
+					class="festival-admin__surface liquid-glass">
 					<div class="festival-admin__surface-header">
 						<div>
 							<h2>Map Image</h2>
@@ -211,7 +211,7 @@
 
 				<section
 					v-else-if="activeSection === 'calibration'"
-					class="festival-admin__surface">
+					class="festival-admin__surface liquid-glass">
 					<div class="festival-admin__surface-header">
 						<div>
 							<h2>Calibration Points</h2>
@@ -242,8 +242,8 @@
 							<p>
 								Click a location on the festival map, then click
 								the exact same location on the real-world map.
-								Repeat this for at least two locations, three or
-								more would be best.
+								Repeat this for at least three locations spread
+                                across the map, away from a single straight line.
 							</p>
 
 							<div
@@ -282,7 +282,6 @@
 									Cancel new point
 								</button>
 							</div>
-							Okay be
 						</div>
 
 						<div class="festival-admin__calibration-maps">
@@ -442,10 +441,11 @@
 											}}
 										</strong>
 
-										<small>
+										<small v-if="point.latitude != null && point.longitude != null">
 											Pixel {{ point.pixel_x }},
 											{{ point.pixel_y }}
 										</small>
+                                        <small v-else>Legacy point — recreate it on both maps.</small>
 									</div>
 
 									<button
@@ -464,7 +464,7 @@
 
 				<section
 					v-else-if="activeSection === 'layers'"
-					class="festival-admin__surface">
+					class="festival-admin__surface liquid-glass">
 					<div class="festival-admin__surface-header">
 						<div>
 							<h2>Layer Settings</h2>
@@ -506,13 +506,13 @@
 
 				<section
 					v-else-if="activeSection === 'pins'"
-					class="festival-admin__surface">
+					class="festival-admin__surface liquid-glass">
 					<div class="festival-admin__surface-header">
 						<div>
 							<h2>Locations & Pins</h2>
 							<p>
 								Add saved locations using geographic coordinates
-								and optional metadata.
+								a category, description and optional information link.
 							</p>
 						</div>
 					</div>
@@ -559,22 +559,25 @@
 								</label>
 							</div>
 
-							<label class="festival-admin__field">
-								<span>Metadata JSON</span>
-								<textarea
-									v-model="pinForm.metadata"
-									rows="4"
-									placeholder='{"category":"stage"}' />
-							</label>
+                            <div class="festival-admin__split">
+                                <label class="festival-admin__field"><span>Category</span>
+                                    <select v-model="pinForm.category" aria-label="Category"><option v-for="category in pinCategories" :key="category.value" :value="category.value">{{ category.label }}</option></select>
+                                </label>
+                                <label class="festival-admin__field"><span>Information link (optional)</span><input v-model.trim="pinForm.url" type="url" placeholder="https://" /></label>
+                            </div>
+                            <label class="festival-admin__field"><span>Description (optional)</span><textarea v-model.trim="pinForm.description" rows="3" maxlength="2000" placeholder="Tell visitors what they can find here." /></label>
+                            <p class="festival-admin__helper-text">Choose a position on the map below, or enter latitude and longitude.</p>
+                            <FestivalMap :festival-id="selectedFestivalId" :api-base="apiBase" :pins-override="pins" selectable :show-locations="false" @location-picked="setPinLocation" />
 
 							<div class="festival-admin__actions">
 								<button
 									class="festival-admin__primary-button"
 									type="submit"
 									:disabled="isSaving">
-									Add Location
+                                    {{ editingPinId ? "Save Location" : "Add Location" }}
 								</button>
-							</div>
+                                <button v-if="editingPinId" type="button" class="festival-admin__secondary-button" @click="cancelPinEdit">Cancel edit</button>
+                            </div>
 						</form>
 
 						<ul v-if="pins.length" class="festival-admin__list">
@@ -586,17 +589,21 @@
 									<strong>{{ pin.label }}</strong>
 
 									<small>
-										Geo {{ pin.latitude }},
+										{{ pin.latitude == null || pin.longitude == null ? "Choose a position for this legacy pin" : "Geo" }} {{ pin.latitude }},
 										{{ pin.longitude }}
 									</small>
 								</div>
 
+                                <div class="festival-admin__actions">
+                                <button type="button" class="festival-admin__secondary-button" @click="editPin(pin)">Edit</button>
 								<button
 									type="button"
+                                    :disabled="isSaving"
 									class="festival-admin__text-button"
 									@click="deletePin(pin.id)">
 									Delete
 								</button>
+                                </div>
 							</li>
 						</ul>
 
@@ -611,14 +618,17 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onMounted, ref, watch} from "vue";
+import {computed, nextTick, onMounted, onBeforeUnmount, ref, shallowRef, watch} from "vue";
 import L from "leaflet";
+import FestivalMap from "./FestivalMap.vue";
+import {safeLink} from "../utils/mapPins";
+import "../styles/mapper.css";
 import "leaflet/dist/leaflet.css";
 
 const props = defineProps({
 	title: {
 		type: String,
-		default: "Festival Admin",
+		default: "Event Map Builder",
 	},
 	subtitle: {
 		type: String,
@@ -656,9 +666,9 @@ const mapFile = ref(null);
 const festivalMapContainer = ref(null);
 const realMapContainer = ref(null);
 
-const realMap = ref(null);
-const pendingRealMarker = ref(null);
-const savedRealMarkers = ref([]);
+const realMap = shallowRef(null);
+const pendingRealMarker = shallowRef(null);
+const savedRealMarkers = shallowRef([]);
 
 const calibrationSelection = ref({
 	pixel: null,
@@ -689,9 +699,9 @@ async function initialiseRealMap() {
 
 	renderSavedRealMarkers();
 
-	if (calibrationPoints.value.length) {
+	if (calibrationPoints.value.some(point => point.latitude != null && point.longitude != null)) {
 		const bounds = L.latLngBounds(
-			calibrationPoints.value.map((point) => [
+			calibrationPoints.value.filter(point => point.latitude != null && point.longitude != null).map((point) => [
 				Number(point.latitude),
 				Number(point.longitude),
 			]),
@@ -715,7 +725,7 @@ function renderSavedRealMarkers() {
 
 	savedRealMarkers.value = [];
 
-	calibrationPoints.value.forEach((point) => {
+	calibrationPoints.value.filter(point => point.latitude != null && point.longitude != null).forEach((point) => {
 		const latitude = Number(point.latitude);
 		const longitude = Number(point.longitude);
 
@@ -723,13 +733,15 @@ function renderSavedRealMarkers() {
 			return;
 		}
 
+        const tooltip = document.createElement('span');
+        tooltip.textContent = point.label || `Point ${point.id}`;
 		const marker = L.circleMarker([latitude, longitude], {
 			radius: 6,
 			weight: 2,
 			fillOpacity: 0.85,
 		})
 			.addTo(realMap.value)
-			.bindTooltip(point.label || `Point ${point.id}`, {
+			.bindTooltip(tooltip, {
 				direction: "top",
 				offset: [0, -8],
 			});
@@ -878,6 +890,21 @@ function resetCalibrationSelection() {
 const festivalForm = ref(createFestivalForm());
 const calibrationForm = ref(createCalibrationForm());
 const pinForm = ref(createPinForm());
+const editingPinId = ref(null);
+const pinCategories = [
+ {value:'stage',label:'Stage'}, {value:'food',label:'Food'}, {value:'drink',label:'Drink'},
+ {value:'toilets',label:'Toilets'}, {value:'medical',label:'Medical'}, {value:'information',label:'Information'},
+ {value:'entrance',label:'Entrance'}, {value:'camping',label:'Camping'}, {value:'other',label:'Other'},
+];
+function setPinLocation(geo) {pinForm.value.latitude=geo.latitude;pinForm.value.longitude=geo.longitude;}
+function cancelPinEdit() {editingPinId.value=null;pinForm.value=createPinForm();}
+function editPin(pin) {
+ editingPinId.value=pin.id;
+ pinForm.value={label:pin.label,latitude:pin.latitude,longitude:pin.longitude,
+  category:pin.metadata?.category || 'other',description:pin.metadata?.description || '',url:pin.metadata?.url || '',metadata:{...(pin.metadata || {})}};
+ if(!pinCategories.some(category=>category.value===pinForm.value.category))pinForm.value.category='other';
+}
+
 
 const sections = computed(() => {
 	const festivalLabel = activeFestival.value
@@ -906,7 +933,7 @@ const sections = computed(() => {
 			icon: "03",
 			title: "Calibration",
 			description: "Align image pixels to geographic coordinates.",
-			meta: `${calibrationPoints.value.length} points`,
+			meta: `${calibrationPoints.value.filter(point=>point.latitude != null && point.longitude != null).length} points`,
 		},
 		{
 			key: "layers",
@@ -926,20 +953,20 @@ const sections = computed(() => {
 });
 
 const themeStyles = computed(() => ({
-	"--festival-admin-accent": props.theme.accent ?? "#ff6a3d",
+	"--festival-admin-accent": props.theme.accent ?? "var(--system-color-primary, #6366f1)",
 	"--festival-admin-accent-soft":
-		props.theme.accentSoft ?? "rgba(255, 106, 61, 0.18)",
+		props.theme.accentSoft ?? "color-mix(in srgb, var(--system-color-primary, #6366f1) 12%, transparent)",
 	"--festival-admin-panel": props.theme.panel ?? "rgba(22, 22, 26, 0.82)",
 	"--festival-admin-panel-strong":
 		props.theme.panelStrong ?? "rgba(32, 32, 38, 0.96)",
 	"--festival-admin-border":
 		props.theme.border ?? "rgba(255, 255, 255, 0.08)",
-	"--festival-admin-text": props.theme.text ?? "#f8f3ef",
+	"--festival-admin-text": props.theme.text ?? "var(--system-text-primary, #fff)",
 	"--festival-admin-text-muted":
 		props.theme.textMuted ?? "rgba(248, 243, 239, 0.72)",
 	"--festival-admin-background":
 		props.theme.background ??
-		"radial-gradient(circle at top, rgba(255, 106, 61, 0.2), transparent 35%), #09080a",
+		"transparent",
 }));
 
 watch(
@@ -1043,9 +1070,12 @@ function createCalibrationForm() {
 function createPinForm() {
 	return {
 		label: "",
-		latitude: 0,
-		longitude: 0,
-		metadata: "{}",
+        latitude: '',
+        longitude: '',
+        category: 'other',
+        description: '',
+        url: '',
+        metadata: {},
 	};
 }
 
@@ -1099,6 +1129,7 @@ async function loadFestivals() {
 }
 
 async function loadFestivalWorkspace(festivalId) {
+	cancelPinEdit(); resetCalibrationSelection();
 	clearMessages();
 
 	try {
@@ -1282,14 +1313,14 @@ async function createPin() {
 	clearMessages();
 
 	try {
-		const metadata = pinForm.value.metadata.trim()
-			? JSON.parse(pinForm.value.metadata)
-			: {};
+        if (pinForm.value.url && !safeLink(pinForm.value.url)) throw new Error('Use an http or https information link.');
+        const metadata = {...pinForm.value.metadata,category:pinForm.value.category,description:pinForm.value.description,url:pinForm.value.url};
+        const wasEditing = Boolean(editingPinId.value);
 
 		const pin = await apiFetch(
-			`/festivals/${selectedFestivalId.value}/pins`,
+			`/festivals/${selectedFestivalId.value}/pins${editingPinId.value ? `/${editingPinId.value}` : ''}`,
 			{
-				method: "POST",
+				method: editingPinId.value ? "PATCH" : "POST",
 				body: JSON.stringify({
 					label: pinForm.value.label,
 					latitude: pinForm.value.latitude,
@@ -1299,10 +1330,9 @@ async function createPin() {
 			},
 		);
 
-		pins.value = [...pins.value, pin];
-		pinForm.value = createPinForm();
-
-		setStatus("Location added.");
+        pins.value = wasEditing ? pins.value.map(existing=>existing.id===pin.id ? pin : existing) : [...pins.value,pin];
+        cancelPinEdit();
+        setStatus(wasEditing ? 'Location updated.' : 'Location added.');
 	} catch (error) {
 		setError(error);
 	} finally {
@@ -1325,6 +1355,7 @@ async function deletePin(pinId) {
 
 		pins.value = pins.value.filter((pin) => pin.id !== pinId);
 
+        if(editingPinId.value===pinId) cancelPinEdit();
 		setStatus("Location removed.");
 	} catch (error) {
 		setError(error);
@@ -1332,6 +1363,8 @@ async function deletePin(pinId) {
 		isSaving.value = false;
 	}
 }
+
+onBeforeUnmount(()=>{realMap.value?.remove();realMap.value=null;});
 
 onMounted(async () => {
 	try {
@@ -1349,521 +1382,50 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.festival-admin {
-	padding: 1.5rem;
-	border-radius: 28px;
-	background: var(--festival-admin-background);
-	color: var(--festival-admin-text);
-	font-family: "Avenir Next", "Segoe UI", sans-serif;
-}
-
-.festival-admin__hero {
-	display: flex;
-	justify-content: space-between;
-	gap: 1.5rem;
-	padding: 1.5rem;
-	border: 1px solid var(--festival-admin-border);
-	border-radius: 24px;
-	background: linear-gradient(
-		145deg,
-		var(--festival-admin-panel-strong),
-		var(--festival-admin-panel)
-	);
-	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
-	margin-bottom: 1.5rem;
-}
-
-.festival-admin__eyebrow {
-	margin: 0 0 0.5rem;
-	font-size: 0.75rem;
-	letter-spacing: 0.16em;
-	text-transform: uppercase;
-	color: var(--festival-admin-accent);
-}
-
-.festival-admin__hero h1,
-.festival-admin__surface-header h2 {
-	margin: 0;
-	font-weight: 700;
-}
-
-.festival-admin__subtitle,
-.festival-admin__surface-header p,
-.festival-admin__helper-text,
-.festival-admin__map-meta,
-.festival-admin__list-item small,
-.festival-admin__section-copy small {
-	color: var(--festival-admin-text-muted);
-}
-
-.festival-admin__hero-actions,
-.festival-admin__stack,
-.festival-admin__field,
-.festival-admin__surface,
-.festival-admin__section-copy,
-.festival-admin__map-meta {
-	display: flex;
-	flex-direction: column;
-	gap: 0.75rem;
-}
-
-.festival-admin__hero-actions {
-	min-width: min(320px, 100%);
-	align-self: flex-end;
-	gap: 1rem;
-}
-
-.festival-admin__field span {
-	font-size: 0.85rem;
-	font-weight: 600;
-	color: var(--festival-admin-text-muted);
-}
-
-.festival-admin__field input,
-.festival-admin__field select,
-.festival-admin__field textarea {
-	width: 100%;
-	padding: 0.9rem 1rem;
-	border: 1px solid var(--festival-admin-border);
-	border-radius: 14px;
-	background: rgba(255, 255, 255, 0.04);
-	color: var(--festival-admin-text);
-	font: inherit;
-}
-
-.festival-admin__field textarea {
-	resize: vertical;
-	min-height: 7rem;
-}
-
-.festival-admin__grid {
-	display: grid;
-	grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-	gap: 1.5rem;
-}
-
-.festival-admin__sections,
-.festival-admin__panel {
-	display: flex;
-	flex-direction: column;
-	gap: 1rem;
-}
-
-.festival-admin__section-card,
-.festival-admin__surface,
-.festival-admin__status {
-	border: 1px solid var(--festival-admin-border);
-	border-radius: 22px;
-	background: var(--festival-admin-panel);
-	backdrop-filter: blur(16px);
-	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
-}
-
-.festival-admin__section-card {
-	display: grid;
-	grid-template-columns: auto 1fr auto;
-	align-items: center;
-	gap: 1rem;
-	width: 100%;
-	padding: 1rem 1.1rem;
-	color: inherit;
-	text-align: left;
-	cursor: pointer;
-	transition:
-		transform 180ms ease,
-		border-color 180ms ease,
-		background 180ms ease;
-}
-
-.festival-admin__section-card:hover,
-.festival-admin__section-card--active {
-	transform: translateY(-2px);
-	border-color: rgba(255, 106, 61, 0.38);
-	background: linear-gradient(
-		145deg,
-		rgba(255, 106, 61, 0.18),
-		var(--festival-admin-panel)
-	);
-}
-
-.festival-admin__section-icon,
-.festival-admin__section-meta {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	padding: 0.55rem 0.7rem;
-	border-radius: 12px;
-	background: var(--festival-admin-accent-soft);
-	color: var(--festival-admin-accent);
-	font-size: 0.8rem;
-	font-weight: 700;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-}
-
-.festival-admin__section-meta {
-	padding-inline: 0.8rem;
-	white-space: nowrap;
-	font-size: 0.72rem;
-}
-
-.festival-admin__surface {
-	padding: 1.5rem;
-	gap: 1.25rem;
-	min-height: 100%;
-}
-
-.festival-admin__surface-header {
-	display: flex;
-	justify-content: space-between;
-	gap: 1rem;
-}
-
-.festival-admin__split {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 1rem;
-}
-
-.festival-admin__split--four {
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.festival-admin__actions {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	flex-wrap: wrap;
-}
-
-.festival-admin__primary-button,
-.festival-admin__secondary-button,
-.festival-admin__danger-button,
-.festival-admin__text-button,
-.festival-admin__upload {
-	appearance: none;
-	border: 0;
-	border-radius: 14px;
-	padding: 0.9rem 1.1rem;
-	font: inherit;
-	font-weight: 600;
-	cursor: pointer;
-	transition:
-		opacity 180ms ease,
-		transform 180ms ease;
-}
-
-.festival-admin__primary-button,
-.festival-admin__upload {
-	background: linear-gradient(135deg, var(--festival-admin-accent), #ff8f50);
-	color: #1a120f;
-}
-
-.festival-admin__secondary-button {
-	background: rgba(255, 255, 255, 0.08);
-	color: var(--festival-admin-text);
-	border: 1px solid var(--festival-admin-border);
-}
-
-.festival-admin__danger-button,
-.festival-admin__text-button {
-	background: transparent;
-	color: #ffb1a0;
-	padding-inline: 0;
-}
-
-.festival-admin__primary-button:disabled,
-.festival-admin__secondary-button:disabled,
-.festival-admin__danger-button:disabled {
-	opacity: 0.55;
-	cursor: not-allowed;
-	transform: none;
-}
-
-.festival-admin__upload {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	max-width: 180px;
-	overflow: hidden;
-}
-
-.festival-admin__upload input {
-	position: absolute;
-	inset: 0;
-	opacity: 0;
-	cursor: pointer;
-}
-
-.festival-admin__list {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 0.85rem;
-}
-
-.festival-admin__list-item {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	padding: 1rem 1.1rem;
-	border-radius: 18px;
-	background: rgba(255, 255, 255, 0.04);
-	border: 1px solid var(--festival-admin-border);
-}
-
-.festival-admin__map-preview {
-	display: flex;
-	flex-direction: column;
-	gap: 0.75rem;
-	padding: 1rem;
-	border-radius: 22px;
-	background: rgba(255, 255, 255, 0.04);
-	border: 1px solid var(--festival-admin-border);
-}
-
-.festival-admin__map-preview img {
-	width: 100%;
-	max-height: 420px;
-	object-fit: contain;
-	border-radius: 16px;
-	background: rgba(0, 0, 0, 0.18);
-}
-
-.festival-admin__empty-state,
-.festival-admin__status {
-	padding: 1rem 1.1rem;
-	color: var(--festival-admin-text-muted);
-}
-
-.festival-admin__status {
-	margin: 0 0 1rem;
-	border-radius: 18px;
-}
-
-.festival-admin__status--success {
-	border-color: rgba(88, 214, 141, 0.28);
-	color: #c2ffd8;
-}
-
-.festival-admin__status--error {
-	border-color: rgba(255, 106, 61, 0.28);
-	color: #ffd2c4;
-}
-
-@media (max-width: 960px) {
-	.festival-admin__hero,
-	.festival-admin__grid {
-		grid-template-columns: 1fr;
-		display: grid;
-	}
-
-	.festival-admin__hero-actions {
-		min-width: 0;
-		align-self: stretch;
-	}
-
-	.festival-admin__split,
-	.festival-admin__split--four {
-		grid-template-columns: 1fr;
-	}
-
-	.festival-admin__list-item,
-	.festival-admin__section-card {
-		grid-template-columns: 1fr;
-		align-items: flex-start;
-	}
-
-	.festival-admin__list-item {
-		flex-direction: column;
-	}
-}
-
-.festival-admin__calibration {
-	display: flex;
-	flex-direction: column;
-	gap: 1.25rem;
-}
-
-.festival-admin__calibration-instructions {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-}
-
-.festival-admin__calibration-instructions p {
-	margin: 0;
-	color: var(--festival-admin-text-muted);
-}
-
-.festival-admin__calibration-status {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.75rem;
-	margin-top: 0.5rem;
-}
-
-.festival-admin__calibration-status span {
-	padding: 0.6rem 0.8rem;
-	border-radius: 10px;
-	background: rgba(255, 255, 255, 0.05);
-	color: var(--festival-admin-text-muted);
-	font-size: 0.85rem;
-}
-
-.festival-admin__calibration-status--complete span {
-	background: var(--festival-admin-accent-soft);
-	color: var(--festival-admin-text);
-}
-
-.festival-admin__calibration-maps {
-	display: grid;
-	grid-template-columns: 1fr;
-	gap: 1.5rem;
-}
-
-.festival-admin__calibration-map-panel {
-	display: flex;
-	flex-direction: column;
-	gap: 0.75rem;
-	min-width: 0;
-}
-
-.festival-admin__calibration-map-header {
-	display: flex;
-	justify-content: space-between;
-	gap: 1rem;
-}
-
-.festival-admin__calibration-map-header div {
-	display: flex;
-	flex-direction: column;
-	gap: 0.2rem;
-}
-
-.festival-admin__calibration-map-header small {
-	color: var(--festival-admin-text-muted);
-}
-
-.festival-admin__festival-map {
-	position: relative;
-	width: 100%;
-	overflow: hidden;
-	border: 1px solid var(--festival-admin-border);
-	border-radius: 18px;
-	background: rgba(0, 0, 0, 0.25);
-	cursor: crosshair;
-}
-
-.festival-admin__calibration-image {
-	display: block;
-	width: 100%;
-	height: auto;
-}
-
-.festival-admin__real-map {
-	width: 100%;
-	height: 500px;
-	overflow: hidden;
-	border: 1px solid var(--festival-admin-border);
-	border-radius: 18px;
-}
-
-.festival-admin__calibration-marker {
-	position: absolute;
-	z-index: 5;
-	width: 16px;
-	height: 16px;
-	padding: 0;
-	border: 3px solid white;
-	border-radius: 50%;
-	background: var(--festival-admin-accent);
-	transform: translate(-50%, -50%);
-	cursor: default;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-}
-
-.festival-admin__calibration-marker span {
-	position: absolute;
-	top: -2rem;
-	left: 50%;
-	transform: translateX(-50%);
-	white-space: nowrap;
-	padding: 0.3rem 0.5rem;
-	border-radius: 6px;
-	background: rgba(0, 0, 0, 0.8);
-	color: white;
-	font-size: 0.7rem;
-	pointer-events: none;
-}
-
-.festival-admin__calibration-marker--pending {
-	background: #ffffff;
-	border-color: var(--festival-admin-accent);
-	pointer-events: none;
-}
-
-.festival-admin__calibration-form {
-	display: flex;
-	flex-direction: column;
-	gap: 1rem;
-	padding: 1rem;
-	border: 1px solid var(--festival-admin-border);
-	border-radius: 18px;
-	background: rgba(255, 255, 255, 0.04);
-}
-
-.festival-admin__calibration-selection {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 1rem;
-}
-
-.festival-admin__calibration-selection > div {
-	display: flex;
-	flex-direction: column;
-	gap: 0.25rem;
-}
-
-.festival-admin__calibration-selection small {
-	color: var(--festival-admin-text-muted);
-}
-
-.festival-admin__calibration-points {
-	display: flex;
-	flex-direction: column;
-	gap: 0.75rem;
-}
-
-.festival-admin__calibration-points h3 {
-	margin: 0;
-	font-size: 1rem;
-}
-
-@media (max-width: 900px) {
-	.festival-admin__calibration-maps {
-		grid-template-columns: 1fr;
-	}
-
-	.festival-admin__calibration-selection {
-		grid-template-columns: 1fr;
-	}
-}
-
-.festival-admin__calibration-cancel {
-	appearance: none;
-	padding: 0.6rem 0.8rem;
-	border: 1px solid rgba(255, 106, 61, 0.35);
-	border-radius: 10px;
-	background: transparent;
-	color: #ffb1a0;
-	font: inherit;
-	font-size: 0.85rem;
-	font-weight: 600;
-	cursor: pointer;
-}
+.festival-admin { padding:0; color:var(--festival-admin-text); font:inherit; }
+.festival-admin__hero { display:flex; justify-content:space-between; gap:20px; padding:20px; border-radius:16px; margin-bottom:16px; }
+.festival-admin__eyebrow { margin:0 0 6px; font-size:.75rem; letter-spacing:.08em; text-transform:uppercase; color:var(--festival-admin-accent); }
+h1,h2,h3,p { margin:0; } h1 {font-size:1.5rem;font-weight:700;} h2 {font-size:1.125rem;font-weight:700;} h3 {font-weight:600;}
+.festival-admin__subtitle,.festival-admin__surface-header p,.festival-admin__helper-text,.festival-admin__map-meta,.festival-admin__list-item small { color:var(--festival-admin-text-muted); font-size:.875rem; margin-top:4px; }
+.festival-admin__hero-actions { width: min(320px,100%); display:flex; flex-direction:column; gap:10px; }
+.festival-admin__grid { display:flex; flex-direction:column; gap:16px; }
+.festival-admin__sections { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+.festival-admin__section-card { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:4px; min-height:64px; padding:12px; border:1px solid rgba(255,255,255,.2); border-radius:9px; color:inherit; background:rgba(0,0,0,.25); text-align:left; }
+.festival-admin__section-card--active { border-color:var(--festival-admin-accent); background:var(--festival-admin-accent-soft); }
+.festival-admin__section-copy small,.festival-admin__section-icon { display:none; }
+.festival-admin__section-meta { font-size:.75rem; opacity:.7; overflow-wrap:anywhere; }
+.festival-admin__surface { padding:20px; border-radius:16px; display:flex; flex-direction:column; gap:16px; }
+.festival-admin__stack,.festival-admin__field,.festival-admin__calibration,.festival-admin__calibration-points { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.festival-admin__field {gap:6px;} .festival-admin__field span {font-size:.875rem;font-weight:600;}
+.festival-admin__field input,.festival-admin__field select,.festival-admin__field textarea {width:100%;min-height:44px;padding:10px 12px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:rgba(0,0,0,.25);color:inherit;font:inherit;}
+.festival-admin__field textarea {resize:vertical;} .festival-admin__split,.festival-admin__calibration-selection {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.festival-admin__actions {display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+.festival-admin__primary-button,.festival-admin__secondary-button,.festival-admin__danger-button,.festival-admin__text-button,.festival-admin__upload,.festival-admin__calibration-cancel {min-height:44px;border-radius:9px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;}
+button.festival-admin__primary-button,.festival-admin__upload {background:var(--festival-admin-accent);color:var(--system-on-primary,#fff);border:1px solid var(--festival-admin-accent);}
+button.festival-admin__secondary-button,.festival-admin__calibration-cancel {background:transparent;border:1px solid var(--festival-admin-accent);color:var(--festival-admin-accent);}
+.festival-admin__danger-button,.festival-admin__text-button {background:transparent;color:#fca5a5;border:1px solid rgba(252,165,165,.4);}
+button:disabled {opacity:.5;cursor:not-allowed;} .festival-admin__upload {position:relative;width:fit-content;overflow:hidden;display:inline-flex;align-items:center;}
+.festival-admin__upload input {position:absolute;inset:0;opacity:0;cursor:pointer;}
+.festival-admin__list {list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;}
+.festival-admin__list-item {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid rgba(255,255,255,.15);border-radius:9px;background:rgba(0,0,0,.15);overflow-wrap:anywhere;}
+.festival-admin__list-item small {display:block;} .festival-admin__status {padding:12px 16px;margin:0 0 16px;border-radius:9px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);}
+.festival-admin__status--success {color:#bbf7d0;} .festival-admin__status--error {color:#fecaca;}
+.festival-admin__empty-state {color:var(--festival-admin-text-muted);padding:16px 0;}
+.festival-admin__map-preview img {width:100%;max-height:420px;object-fit:contain;border-radius:12px;}
+.festival-admin__map-meta {display:flex;flex-wrap:wrap;gap:12px;}
+.festival-admin__calibration-instructions {display:flex;flex-direction:column;gap:8px;}
+.festival-admin__calibration-instructions p,.festival-admin__calibration-map-header small,.festival-admin__calibration-selection small {color:var(--festival-admin-text-muted);font-size:.875rem;}
+.festival-admin__calibration-status {display:flex;flex-wrap:wrap;gap:8px;} .festival-admin__calibration-status span {padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.06);font-size:.875rem;}
+.festival-admin__calibration-status--complete span {background:var(--festival-admin-accent-soft);}
+.festival-admin__calibration-maps {display:grid;grid-template-columns:1fr;gap:16px;}
+.festival-admin__calibration-map-panel {min-width:0;} .festival-admin__calibration-map-header div {display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.festival-admin__festival-map {position:relative;width:100%;overflow:hidden;border-radius:12px;cursor:crosshair;}
+.festival-admin__calibration-image {display:block;width:100%;height:auto;}
+.festival-admin__real-map {height:440px;width:100%;border-radius:12px;isolation:isolate;}
+.festival-admin__calibration-marker {position:absolute;z-index:5;width:16px;height:16px;padding:0;border:3px solid white;border-radius:50%;background:var(--festival-admin-accent);transform:translate(-50%,-50%);}
+.festival-admin__calibration-marker span {position:absolute;top:-32px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:4px 6px;border-radius:6px;background:rgba(0,0,0,.85);color:#fff;font-size:.75rem;pointer-events:none;}
+.festival-admin__calibration-marker--pending {background:#fff;border-color:var(--festival-admin-accent);}
+.festival-admin__calibration-form {display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,.15);}
+.festival-admin__calibration-selection > div {display:flex;flex-direction:column;gap:4px;}
+@media(max-width:767px){.festival-admin__hero{flex-direction:column;padding:16px;}.festival-admin__hero-actions{width:100%;}.festival-admin__sections{grid-template-columns:repeat(2,minmax(0,1fr));}.festival-admin__surface{padding:16px;}.festival-admin__split,.festival-admin__calibration-selection{grid-template-columns:1fr;}.festival-admin__list-item{align-items:flex-start;flex-direction:column;}.festival-admin__real-map{height:350px;}}
 </style>
