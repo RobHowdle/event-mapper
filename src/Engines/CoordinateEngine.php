@@ -40,6 +40,8 @@ class CoordinateEngine
     {
         return $festival
             ->calibrationPoints()
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
             ->get()
             ->map(fn(CalibrationPoint $point) => $point->toAnchor())
             ->all();

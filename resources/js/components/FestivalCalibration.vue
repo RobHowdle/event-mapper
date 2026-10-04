@@ -82,11 +82,12 @@
 						{{ point.label || `Point ${point.id}` }}
 					</strong>
 
-					<small>
+					<small v-if="point.latitude != null && point.longitude != null">
 						Pixel {{ point.pixel_x }}, {{ point.pixel_y }}
 						→
 						{{ point.latitude }}, {{ point.longitude }}
 					</small>
+					<small v-else>Legacy point — recreate this point on both maps to calibrate it.</small>
 				</div>
 
 				<button type="button" @click="deletePoint(point.id)">
