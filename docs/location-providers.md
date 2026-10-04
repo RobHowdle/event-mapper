@@ -56,3 +56,21 @@ A copied/shared URL is an external Google Maps search link containing the latitu
 With the built-in affine transformer, the initial online load resolves three geographic artwork corners once and retains the derived transform in memory. Image clicks, centre changes, pin rendering and cross-layer position conversion then run locally. Link generation, coordinate copying and sharing do not wait for elevation or what3words requests and remain usable if those services or the YNF connection fail after loading. Custom coordinate transformers retain their existing server conversion behaviour.
 
 The page, calibration and artwork must be loaded before losing connectivity; this does not introduce offline cold-start support or download basemap tiles. Message delivery and offline maps availability are handled by the messaging/map applications.
+
+### Mobile layout and layer scale
+
+The public viewer shares centre coordinates and ground scale (metres per screen pixel)
+between the festival artwork, street map and topography. Image-space zoom numbers are
+not comparable to geographic Leaflet zoom numbers. With an affine calibration, the
+viewer measures the geographic distance represented by an image pixel and converts
+that scale to each layer's zoom. Switching layers therefore retains scale as well as
+position; the underlying Leaflet instances remain mounted. Rotated or stretched
+artwork still has its original orientation, so matching scale does not imply an
+identical rectangular footprint. Uncalibrated artwork remains usable independently.
+
+Below 768px, layer buttons stay on one row, the map uses a bounded viewport height,
+and layer options, centre sharing and location search are expandable. Selecting a
+location exposes its sharing controls; selecting a saved pin also opens its details.
+Zoom controls use 44px touch targets. Show whole site fits the active layer to the
+artwork footprint and updates the shared view. The page can still scroll around the
+map; no fullscreen surface or assumptions about a host's bottom navigation are used.

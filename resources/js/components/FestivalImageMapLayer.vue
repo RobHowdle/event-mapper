@@ -13,11 +13,14 @@ import {nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch} from "vue"
 
 import L from "leaflet";
 import {pixelToGeo, geoToPixel} from '../utils/imageCalibration';
+import {imageGroundScale, imageZoom, validScale} from '../utils/mapScale';
 import {drawPins} from "../utils/mapPins";
 import "leaflet/dist/leaflet.css";
 
 const props = defineProps({
  active: {type: Boolean, default: true},
+ viewScale: {type:Number,default:null},
+ resetView: {type:Number,default:0},
  pins: {type: Array, default: () => []},
  selectable: {type: Boolean, default: false},
  selectionGeo:{type:Object,default:null},
@@ -38,7 +41,7 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["position-changed", "pin-selected", "location-picked"]);
+const emit = defineEmits(["position-changed", "pin-selected", "location-picked", "scale-changed"]);
 
 const mapElement = ref(null);
 const map = shallowRef(null);
@@ -130,10 +133,10 @@ async function initialiseMap() {
 
 	map.value = L.map(mapElement.value, {
 		crs: L.CRS.Simple,
-		minZoom: -4,
-		maxZoom: 4,
-		zoomSnap: 0.25,
-		zoomDelta: 0.25,
+		minZoom: -8,
+		maxZoom: 8,
+		zoomSnap: 0.01,
+		zoomDelta: 0.5,
 		attributionControl: false,
 	});
 
@@ -152,6 +155,8 @@ async function initialiseMap() {
 	if (props.currentGeo) {
 		await moveToGeo(props.currentGeo);
 	}
+    syncScale();
+    publishScale();
 }
 
 async function handleMapMoved() {
@@ -166,6 +171,7 @@ async function handleMapMoved() {
 
 	const request = ++positionRequest;
 	const centre = map.value.getCenter();
+    publishScale();
 
 	const pixelX = centre.lng;
 	const pixelY = -centre.lat;
@@ -205,6 +211,7 @@ async function moveToGeo(geo) {
         isSyncing.value = true;
         map.value.panTo([-result.pixel.y, result.pixel.x], {animate: false});
         isSyncing.value = false;
+        syncScale();
 	} catch (error) {
 		console.error(
 			"Failed to move festival map to geographic position:",
@@ -226,6 +233,32 @@ watch(
 		deep: true,
 	},
 );
+
+function groundScale() {
+    if (!map.value || !props.calibration) return null;
+    const centre = map.value.getCenter();
+    try { return imageGroundScale(props.calibration, centre.lng, -centre.lat); }
+    catch { return null; }
+}
+function publishScale() {
+    const ground = groundScale();
+    if (props.active && validScale(ground)) emit('scale-changed', ground / 2 ** map.value.getZoom());
+}
+function syncScale() {
+    const ground = groundScale();
+    if (!props.active || !validScale(ground) || !validScale(props.viewScale)) return;
+    const zoom = Math.min(map.value.getMaxZoom(), Math.max(map.value.getMinZoom(), imageZoom(ground, props.viewScale)));
+    if (Math.abs(map.value.getZoom() - zoom) < .011) return;
+    isSyncing.value = true;
+    map.value.setZoom(zoom, {animate:false});
+    isSyncing.value = false;
+}
+watch(() => props.viewScale, syncScale);
+watch(() => props.resetView, () => {
+    if (!props.active || !map.value) return;
+    map.value.fitBounds([[-Number(props.festival.map_height),0],[0,Number(props.festival.map_width)]], {padding:[12,12],animate:false});
+    handleMapMoved();
+});
 
 async function renderPins() {
     if (!map.value) return;
@@ -266,6 +299,7 @@ watch(() => props.active, async active => {
     await initialiseMap(); await nextTick();
     map.value?.invalidateSize({pan:false});
     if (props.currentGeo) await moveToGeo(props.currentGeo);
+    syncScale();
 });
 onMounted(initialiseMap);
 

@@ -12,6 +12,7 @@
 import {nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch} from "vue";
 
 import L from "leaflet";
+import {geographicScale, geographicZoom, validScale} from '../utils/mapScale';
 import {drawPins} from "../utils/mapPins";
 import {terrainOverlay, terrainContours} from '../utils/terrainOverlay';
 import {artworkOverlay} from "../utils/artworkOverlay";
@@ -19,6 +20,8 @@ import "leaflet/dist/leaflet.css";
 
 const props = defineProps({
  active: {type:Boolean,default:true},
+ viewScale:{type:Number,default:null},
+ resetView:{type:Number,default:0},
  pins: {type:Array,default:()=>[]},
  selectable:{type:Boolean,default:false},
  selectionGeo:{type:Object,default:null},
@@ -39,7 +42,7 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["position-changed", "pin-selected", "location-picked", "grid-status"]);
+const emit = defineEmits(["position-changed", "pin-selected", "location-picked", "grid-status", "scale-changed"]);
 
 const mapElement = ref(null);
 const map = shallowRef(null);
@@ -60,6 +63,8 @@ async function initialiseMap() {
 
 	map.value = L.map(mapElement.value, {
 		zoomControl: true,
+        zoomSnap: .01,
+        zoomDelta: .5,
 	}).setView(initialPosition, props.currentGeo ? (props.what3words ? 18 : 16) : 6);
 
 	tiles = L.tileLayer(props.topography ? props.tileUrl : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -71,8 +76,9 @@ async function initialiseMap() {
 
 	map.value.on("moveend", handleMapMoved);
     map.value.on('click', event => { if(props.selectable && props.active) emit('location-picked',{latitude:event.latlng.lat,longitude:event.latlng.lng}); });
+    syncScale();
     renderArtwork(); renderTerrain(); renderPins(); renderSelection(); scheduleGrid();
-    if(!props.currentGeo)emit('position-changed',{latitude:initialPosition[0],longitude:initialPosition[1]});
+    handleMapMoved();
 }
 
 function handleMapMoved() {
@@ -81,6 +87,7 @@ function handleMapMoved() {
 
 
 	const centre = map.value.getCenter();
+    emit("scale-changed", geographicScale(centre.lat, map.value.getZoom()));
 	emit("position-changed", {
 		latitude: centre.lat,
 		longitude: centre.lng,
@@ -105,6 +112,7 @@ function moveToGeo(geo) {
 	isSyncing.value = true;
 	map.value.panTo([Number(geo.latitude), Number(geo.longitude)], {animate:false});
     isSyncing.value = false;
+    syncScale();
 }
 
 watch(
@@ -120,6 +128,23 @@ watch(
 		deep: true,
 	},
 );
+
+function syncScale() {
+    if (!props.active || !map.value || !validScale(props.viewScale)) return;
+    const zoom = Math.min(map.value.getMaxZoom(), Math.max(map.value.getMinZoom(), geographicZoom(map.value.getCenter().lat, props.viewScale)));
+    if (Math.abs(map.value.getZoom() - zoom) < .011) return;
+    isSyncing.value = true;
+    map.value.setZoom(zoom, {animate:false});
+    isSyncing.value = false;
+}
+watch(() => props.viewScale, syncScale);
+watch(() => props.resetView, () => {
+    if (!props.active || !map.value || props.corners.length !== 3) return;
+    const [a,b,c] = props.corners;
+    const d = {latitude:b.latitude+c.latitude-a.latitude,longitude:b.longitude+c.longitude-a.longitude};
+    map.value.fitBounds([a,b,c,d].map(point=>[point.latitude,point.longitude]), {padding:[12,12],animate:false});
+    handleMapMoved();
+});
 
 function renderArtwork() {
     if (!map.value) return;
@@ -171,6 +196,7 @@ watch(() => props.active,async active=>{
     if(!active) {scheduleGrid();return;}
     await initialiseMap(); await nextTick(); map.value?.invalidateSize({pan:false});
     if(props.currentGeo) moveToGeo(props.currentGeo);
+    syncScale();
     scheduleGrid();
 });
 onMounted(initialiseMap);
