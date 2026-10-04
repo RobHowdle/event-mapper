@@ -73,7 +73,7 @@ class LayerApiTest extends TestCase
                 ],
                 [
                     'id' => 'geo-map',
-                    'name' => 'what3words',
+                    'name' => 'Map',
                     'is_active' => false,
                     'render' => [
                         'component' => 'GeoMapLayer',

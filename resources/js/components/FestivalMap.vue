@@ -42,13 +42,13 @@
                 <GeoMapLayer v-if="hasTopography" v-show="activeLayerId === 'topography'" :key="`topography-${festivalId}`" :active="activeLayerId === 'topography'" topography :terrain="terrain" :terrain-opacity="terrainOpacity / 100" :festival="festival" :corners="terrainCorners" :artwork-opacity="terrainArtwork ? 1 : 0" :tile-url="settings.topography_tiles" :tile-max-zoom="settings.topography_max_zoom" :current-geo="currentGeo" :pins="filteredPins" selectable :selection-geo="selectionGeo" @position-changed="onPositionChanged" @pin-selected="selectPin" @location-picked="pickLocation" />
             </div>
             <p v-if="activeLayerId === 'geo-map'" class="festival-map__hint" role="status">{{ settings.what3words_enabled ? gridMessage : settings.what3words_message }}</p>
-            <p class="festival-map__hint">{{ selectable ? 'Click a map to place your location pin. Drag the map to move around.' : 'Click a point to see its what3words address and elevation.' }}</p>
+            <p class="festival-map__hint">{{ selectable ? 'Click a map to place your location pin. Drag the map to move around.' : (settings.what3words_enabled ? 'Click a point to see its what3words address and elevation.' : 'Select a pin or click the map to explore a location.') }}</p>
             <div v-if="selectionGeo" class="festival-map__point" aria-label="Selected point" role="region">
                 <strong>Selected location</strong><p v-if="selectable">{{ Number(selectionGeo.latitude).toFixed(6) }}, {{ Number(selectionGeo.longitude).toFixed(6) }}</p>
                 <p v-if="pointLoading" role="status">Looking up location…</p>
                 <template v-else>
                     <p v-if="pointInfo?.what3words"><a :href="pointInfo.what3words.url" target="_blank" rel="noopener noreferrer">///{{ pointInfo.what3words.words }}</a></p>
-                    <p v-else>{{ pointInfo?.errors?.what3words }}</p><button v-if="pointInfo?.errors?.what3words" class="mapper-button" type="button" @click="lookupPoint(selectionGeo, true)">Retry location lookup</button>
+                    <p v-else-if="pointInfo?.errors?.what3words">{{ pointInfo.errors.what3words }}</p><button v-if="pointInfo?.errors?.what3words" class="mapper-button" type="button" @click="lookupPoint(selectionGeo, true)">Retry location lookup</button>
                     <p v-if="pointInfo?.elevation">Elevation: {{ pointInfo.elevation.metres }} m above sea level <small>(terrain estimate)</small></p>
                     <p v-else>{{ pointInfo?.errors?.elevation }}</p>
                     <div class="festival-map__buttons" v-if="pointInfo?.what3words"><button class="mapper-button" type="button" @click="copyAddress">{{ copyStatus || 'Copy what3words' }}</button><button class="mapper-button" type="button" @click="shareAddress">Share location</button></div>
@@ -64,6 +64,7 @@
                     <button class="mapper-button" type="button" aria-label="Close location details" @click="selectedPin=null">×</button>
                     <p v-if="selectedPin.metadata?.description" class="festival-map__description">{{ selectedPin.metadata.description }}</p>
                     <div class="festival-map__buttons">
+                        <a class="mapper-button" :href="directionsUrl(selectedPin)" target="_blank" rel="noopener noreferrer">Get directions</a>
                         <a v-if="pointInfo?.what3words" class="mapper-button" :href="pointInfo.what3words.url" target="_blank" rel="noopener noreferrer">Open what3words</a>
                         <a v-if="safeLink(selectedPin.metadata?.url)" class="mapper-button" :href="safeLink(selectedPin.metadata.url)" target="_blank" rel="noopener noreferrer">More information</a>
                     </div>
@@ -93,7 +94,7 @@ const pickedPoint=ref(null),pointInfo=ref(null),pointLoading=ref(false),copyStat
 const settings=ref({what3words_enabled:false,topography_tiles:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',topography_max_zoom:19});
 const selectionGeo=computed(()=>props.selectedLocation || pickedPoint.value);
 const pins=computed(()=>(props.pinsOverride ?? loadedPins.value).filter(pin=>pin.latitude != null && pin.longitude != null));
-const activeLayers=computed(()=>layers.value.filter(layer=>layer.is_active && ['festival-image','geo-map','topography'].includes(layer.id)));
+const activeLayers=computed(()=>layers.value.filter(layer=>layer.is_active && ['festival-image','geo-map','topography'].includes(layer.id)).map(layer=>layer.id === 'geo-map' ? {...layer,name:settings.value.what3words_enabled ? 'what3words' : 'Map'} : layer));
 const hasImage=computed(()=>activeLayers.value.some(layer=>layer.id==='festival-image'));
 const hasGeo=computed(()=>activeLayers.value.some(layer=>layer.id==='geo-map'));
 const hasTopography=computed(()=>activeLayers.value.some(layer=>layer.id==='topography'));
@@ -120,10 +121,11 @@ watch(activeLayerId,id=>{if(id==='topography' && !terrain.value && !terrainLoadi
 function switchLayer(id){comparing.value=false;activeLayerId.value=id;}
 async function toggleCompare(){if(comparing.value){comparing.value=false;return;}comparing.value=true;activeLayerId.value='geo-map';if(corners.value.length)return;const id=props.festivalId;try{const points=await Promise.all([[0,0],[festival.value.map_width,0],[0,festival.value.map_height]].map(([x,y])=>apiFetch(`/festivals/${id}/coordinates/to-geo`,{x,y})));if(id!==props.festivalId)return;corners.value=points.map(point=>point.geo);}catch{overlayError.value='Compare layers needs at least three valid calibration points. The street map is still available.';}}
 function onPositionChanged(geo){if(currentGeo.value && Math.abs(currentGeo.value.latitude-geo.latitude)<1e-9 && Math.abs(currentGeo.value.longitude-geo.longitude)<1e-9)return;currentGeo.value={latitude:Number(geo.latitude),longitude:Number(geo.longitude)};}
+function directionsUrl(pin){return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${pin.latitude},${pin.longitude}`)}`;}
 function selectPin(pin){pickLocation({latitude:pin.latitude,longitude:pin.longitude});selectedPin.value=pin;}
 function pickLocation(geo){selectedPin.value=null;pickedPoint.value={latitude:Number(geo.latitude),longitude:Number(geo.longitude)};onPositionChanged(geo);emit('location-picked',pickedPoint.value);}
 async function lookupPoint(geo,force=false){const key=geo ? `${geo.latitude},${geo.longitude}` : "";if(!force && key && key===lastPointKey && (pointLoading.value || pointInfo.value))return;lastPointKey=key;const request=++pointRequest;pointInfo.value=null;copyStatus.value='';if(!geo){pointLoading.value=false;return;}pointLoading.value=true;
- try{const query=new URLSearchParams(geo);const response=await fetch(`${props.apiBase}/location-info/point?${query}`,{headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(request===pointRequest)pointInfo.value=data;}catch{if(request===pointRequest)pointInfo.value={errors:{what3words:'Location information is temporarily unavailable.'}};}finally{if(request===pointRequest)pointLoading.value=false;}}
+ try{const query=new URLSearchParams(geo);const response=await fetch(`${props.apiBase}/location-info/point?${query}`,{headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(request===pointRequest)pointInfo.value=data;}catch{if(request===pointRequest)pointInfo.value={errors:{elevation:'Location information is temporarily unavailable.'}};}finally{if(request===pointRequest)pointLoading.value=false;}}
 async function copyAddress(){try{await navigator.clipboard.writeText(`///${pointInfo.value.what3words.words} ${pointInfo.value.what3words.url}`);copyStatus.value='Copied';}catch{copyStatus.value='Select the address above to copy it';}}
 async function shareAddress(){const address=pointInfo.value?.what3words;if(!address)return;if(navigator.share){try{await navigator.share({title:'Festival meeting point',text:`///${address.words}`,url:address.url});}catch(error){if(error.name!=='AbortError')await copyAddress();}}else await copyAddress();}
 watch(selectionGeo,geo=>lookupPoint(geo),{deep:true});

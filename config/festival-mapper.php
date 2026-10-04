@@ -44,7 +44,10 @@ return [
     */
     'transformer' => \FestivalMapper\Transforms\AffineTransformer::class,
 
-    'what3words' => ['key' => env('WHAT3WORDS_API_KEY')],
+    'what3words' => [
+        'enabled' => env('FESTIVAL_MAPPER_WHAT3WORDS_ENABLED', false),
+        'key' => env('WHAT3WORDS_API_KEY'),
+    ],
     'topography' => [
         'tiles' => env('FESTIVAL_MAPPER_TOPOGRAPHY_TILES', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
         'max_zoom' => 19,

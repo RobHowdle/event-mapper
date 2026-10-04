@@ -15,7 +15,7 @@ class GeoMapLayer implements LayerInterface
 
     public function name(): string
     {
-        return 'what3words';
+        return 'Map';
     }
 
     public function render(): array

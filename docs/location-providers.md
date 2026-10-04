@@ -1,3 +1,9 @@
+# Standard map and optional providers
+
+The standard Map layer uses OpenStreetMap. what3words is disabled by default: no provider configuration, address or grid requests are made, and the viewer displays no what3words unavailable messages. Pin placement, calibration, layer comparison, directions and estimated elevation remain available without a paid what3words plan. The stored YN Auth key does not need removing.
+
+Set `FESTIVAL_MAPPER_WHAT3WORDS_ENABLED=true` in a host application's environment only to opt into what3words when its provider has suitable API entitlement, then clear configuration caches. Existing `geo-map` activation settings are preserved. When enabled, the public viewer labels the layer what3words; otherwise it is Map.
+
 # Location pins, what3words and elevation colours
 
 Click a map in Locations & Pins to place the selection marker and fill its coordinates. Click again to move it. Manual coordinates remain optional. The public viewer also supports selecting an arbitrary point and copying or sharing its what3words address.

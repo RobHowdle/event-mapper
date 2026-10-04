@@ -18,6 +18,7 @@ class LocationInfoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['festival-mapper.what3words.enabled' => true]);
         Cache::flush();
         RateLimiter::clear('festival-mapper:elevation:second');
         RateLimiter::clear('festival-mapper:elevation:day');
@@ -104,6 +105,17 @@ class LocationInfoTest extends TestCase
         $response = $this->getJson('/api/festival-mapper/location-info/point?latitude=52.83&longitude=-1.39')->assertOk();
         $this->assertStringContainsString('API plan', $response->json('errors.what3words'));
         $this->assertStringNotContainsString('SECRET', $response->getContent());
+    }
+
+    public function test_standard_map_does_not_call_what3words_or_show_unavailable_errors(): void
+    {
+        config(['festival-mapper.what3words.enabled' => false, 'festival-mapper.elevation.enabled' => false]);
+        $this->getJson('/api/festival-mapper/location-info/settings')->assertOk()
+            ->assertJsonPath('what3words_enabled', false)->assertJsonPath('what3words_message', null);
+        $this->getJson('/api/festival-mapper/location-info/point?latitude=52.83&longitude=-1.39')
+            ->assertOk()->assertJsonPath('what3words', null)->assertJsonPath('errors', []);
+        $this->getJson('/api/festival-mapper/location-info/grid?south=52.83&north=52.8301&west=-1.39&east=-1.3899')->assertNotFound();
+        Http::assertNothingSent();
     }
 
 }

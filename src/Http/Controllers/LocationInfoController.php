@@ -15,7 +15,10 @@ class LocationInfoController extends Controller
 
     public function settings(): JsonResponse
     {
+        $enabled = false; $message = null;
+        if (config('festival-mapper.what3words.enabled', false)) {
         try { $enabled = $this->words->enabled(); $message = $enabled ? null : $this->failureMessage(1000); } catch (Throwable $error) { $enabled = false; $message = $this->failureMessage($error->getCode()); }
+        }
         return response()->json([
             'what3words_enabled' => $enabled,
             'what3words_message' => $message,
@@ -32,10 +35,12 @@ class LocationInfoController extends Controller
             'longitude' => ['required', 'numeric', 'between:-180,180'],
         ]);
         $result = ['what3words' => null, 'elevation' => null, 'errors' => []];
+        if (config('festival-mapper.what3words.enabled', false)) {
         try {
             $result['what3words'] = $this->words->address((float) $data['latitude'], (float) $data['longitude']);
         } catch (Throwable $error) {
             $result['errors']['what3words'] = $this->failureMessage($error->getCode());
+        }
         }
         if (config('festival-mapper.elevation.enabled', true)) {
             try {
@@ -49,6 +54,7 @@ class LocationInfoController extends Controller
 
     public function grid(Request $request): JsonResponse
     {
+        abort_unless(config('festival-mapper.what3words.enabled', false), 404);
         $data = $request->validate([
             'south' => ['required', 'numeric', 'between:-90,90'],
             'north' => ['required', 'numeric', 'between:-90,90', 'gt:south'],
