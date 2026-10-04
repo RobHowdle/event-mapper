@@ -17,17 +17,17 @@
                 <p v-if="overlayError" role="status">{{ overlayError }}</p>
             </div>
             <div v-if="activeLayerId === 'topography'" class="festival-map__terrain-controls">
-                <p v-if="terrainLoading" role="status">Loading elevation colours…</p>
+                <p v-if="terrainLoading" role="status">Loading elevation contours…</p>
                 <p v-else-if="terrainError" role="status">{{ terrainError }} <button class="mapper-button" type="button" @click="loadTerrain">Try again</button></p>
                 <template v-else-if="terrain">
                     <div class="festival-map__legend" role="img" :aria-label="`Elevation from ${terrain.minimum} to ${terrain.maximum} metres above sea level`">
-                        <strong>Elevation · metres above sea level</strong>
-                        <div class="festival-map__gradient" :style="{background:elevationGradient}"></div>
+                        <strong>Estimated elevation · metres above sea level</strong>
+                        <div v-if="terrainOpacity > 0" class="festival-map__gradient" :style="{background:elevationGradient}"></div>
                         <div class="festival-map__legend-labels"><span>{{ terrain.minimum }} m</span><span>{{ ((terrain.minimum + terrain.maximum) / 2).toFixed(1) }} m</span><span>{{ terrain.maximum }} m</span></div>
                     </div>
-                    <label class="festival-map__terrain-opacity">Elevation opacity <span>{{ terrainOpacity }}%</span><input v-model.number="terrainOpacity" type="range" min="0" max="100" aria-label="Elevation opacity" /></label>
+                    <label class="festival-map__terrain-opacity">Colour shading (optional) <span>{{ terrainOpacity }}%</span><input v-model.number="terrainOpacity" type="range" min="0" max="100" aria-label="Elevation opacity" /></label>
                     <label v-if="festival?.map_image_url" class="festival-map__artwork-toggle"><input v-model="terrainArtwork" type="checkbox" /> Show festival artwork underneath</label>
-                    <p class="festival-map__hint">Terrain estimate · {{ terrain.dataset.toUpperCase() }} · sampled approximately every {{ terrain.sample_spacing_metres }} m. Colours use a fixed scale for this site. Unavailable areas are transparent.</p>
+                    <p class="festival-map__hint">Contour labels show estimated height. Samples are approximately {{ terrain.sample_spacing_metres }} m apart; small slopes and paths may not be represented.</p>
                 </template>
             </div>
             <div class="festival-map__canvas-wrapper">
@@ -36,18 +36,19 @@
                     :key="`image-${festivalId}`" :active="activeLayerId === 'festival-image'" :festival="festival" :current-geo="currentGeo" :api-base="apiBase" :pins="filteredPins" :selectable="true" :selection-geo="selectionGeo"
                     @position-changed="onPositionChanged" @pin-selected="selectPin" @location-picked="pickLocation" />
                 <GeoMapLayer v-if="hasGeo" v-show="activeLayerId === 'geo-map'" :key="`geo-${festivalId}`"
-                    :api-base="apiBase" :what3words="settings.what3words_enabled" :active="activeLayerId === 'geo-map'" :festival="festival" :current-geo="currentGeo" :pins="filteredPins" :selectable="true" :selection-geo="selectionGeo" :corners="corners"
+                    :api-base="apiBase" :what3words="settings.what3words_enabled" @grid-status="gridMessage=$event" :active="activeLayerId === 'geo-map'" :festival="festival" :current-geo="currentGeo" :pins="filteredPins" :selectable="true" :selection-geo="selectionGeo" :corners="corners"
                     :artwork-opacity="comparing ? artworkOpacity / 100 : 0" :street-opacity="comparing ? streetOpacity / 100 : 1"
                     @position-changed="onPositionChanged" @pin-selected="selectPin" @location-picked="pickLocation" />
                 <GeoMapLayer v-if="hasTopography" v-show="activeLayerId === 'topography'" :key="`topography-${festivalId}`" :active="activeLayerId === 'topography'" topography :terrain="terrain" :terrain-opacity="terrainOpacity / 100" :festival="festival" :corners="terrainCorners" :artwork-opacity="terrainArtwork ? 1 : 0" :tile-url="settings.topography_tiles" :tile-max-zoom="settings.topography_max_zoom" :current-geo="currentGeo" :pins="filteredPins" selectable :selection-geo="selectionGeo" @position-changed="onPositionChanged" @pin-selected="selectPin" @location-picked="pickLocation" />
             </div>
+            <p v-if="activeLayerId === 'geo-map'" class="festival-map__hint" role="status">{{ settings.what3words_enabled ? gridMessage : settings.what3words_message }}</p>
             <p class="festival-map__hint">{{ selectable ? 'Click a map to place your location pin. Drag the map to move around.' : 'Click a point to see its what3words address and elevation.' }}</p>
             <div v-if="selectionGeo" class="festival-map__point" aria-label="Selected point" role="region">
-                <strong>Selected location</strong><p>{{ Number(selectionGeo.latitude).toFixed(6) }}, {{ Number(selectionGeo.longitude).toFixed(6) }}</p>
+                <strong>Selected location</strong><p v-if="selectable">{{ Number(selectionGeo.latitude).toFixed(6) }}, {{ Number(selectionGeo.longitude).toFixed(6) }}</p>
                 <p v-if="pointLoading" role="status">Looking up location…</p>
                 <template v-else>
                     <p v-if="pointInfo?.what3words"><a :href="pointInfo.what3words.url" target="_blank" rel="noopener noreferrer">///{{ pointInfo.what3words.words }}</a></p>
-                    <p v-else>{{ pointInfo?.errors?.what3words }}</p>
+                    <p v-else>{{ pointInfo?.errors?.what3words }}</p><button v-if="pointInfo?.errors?.what3words" class="mapper-button" type="button" @click="lookupPoint(selectionGeo, true)">Retry location lookup</button>
                     <p v-if="pointInfo?.elevation">Elevation: {{ pointInfo.elevation.metres }} m above sea level <small>(terrain estimate)</small></p>
                     <p v-else>{{ pointInfo?.errors?.elevation }}</p>
                     <div class="festival-map__buttons" v-if="pointInfo?.what3words"><button class="mapper-button" type="button" @click="copyAddress">{{ copyStatus || 'Copy what3words' }}</button><button class="mapper-button" type="button" @click="shareAddress">Share location</button></div>
@@ -86,9 +87,10 @@ const emit=defineEmits(['location-picked']);
 const festival=ref(null),layers=ref([]),loadedPins=ref([]),activeLayerId=ref(null),currentGeo=ref(null);
 const loading=ref(true),error=ref(''),search=ref(''),category=ref(''),selectedPin=ref(null),comparing=ref(false),artworkOpacity=ref(50),streetOpacity=ref(100),corners=ref([]),overlayError=ref('');
 let loadRequest=0,pointRequest=0,terrainRequest=0,lastPointKey="";
-const terrain=ref(null),terrainLoading=ref(false),terrainError=ref(''),terrainOpacity=ref(65),terrainArtwork=ref(true),terrainCorners=ref([]);
+const gridMessage=ref('');
+const terrain=ref(null),terrainLoading=ref(false),terrainError=ref(''),terrainOpacity=ref(0),terrainArtwork=ref(false),terrainCorners=ref([]);
 const pickedPoint=ref(null),pointInfo=ref(null),pointLoading=ref(false),copyStatus=ref('');
-const settings=ref({what3words_enabled:false,topography_tiles:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',topography_max_zoom:17});
+const settings=ref({what3words_enabled:false,topography_tiles:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',topography_max_zoom:19});
 const selectionGeo=computed(()=>props.selectedLocation || pickedPoint.value);
 const pins=computed(()=>(props.pinsOverride ?? loadedPins.value).filter(pin=>pin.latitude != null && pin.longitude != null));
 const activeLayers=computed(()=>layers.value.filter(layer=>layer.is_active && ['festival-image','geo-map','topography'].includes(layer.id)));
@@ -120,11 +122,11 @@ async function toggleCompare(){if(comparing.value){comparing.value=false;return;
 function onPositionChanged(geo){if(currentGeo.value && Math.abs(currentGeo.value.latitude-geo.latitude)<1e-9 && Math.abs(currentGeo.value.longitude-geo.longitude)<1e-9)return;currentGeo.value={latitude:Number(geo.latitude),longitude:Number(geo.longitude)};}
 function selectPin(pin){pickLocation({latitude:pin.latitude,longitude:pin.longitude});selectedPin.value=pin;}
 function pickLocation(geo){selectedPin.value=null;pickedPoint.value={latitude:Number(geo.latitude),longitude:Number(geo.longitude)};onPositionChanged(geo);emit('location-picked',pickedPoint.value);}
-async function lookupPoint(geo){const key=geo ? `${geo.latitude},${geo.longitude}` : "";if(key && key===lastPointKey && (pointLoading.value || pointInfo.value))return;lastPointKey=key;const request=++pointRequest;pointInfo.value=null;copyStatus.value='';if(!geo){pointLoading.value=false;return;}pointLoading.value=true;
+async function lookupPoint(geo,force=false){const key=geo ? `${geo.latitude},${geo.longitude}` : "";if(!force && key && key===lastPointKey && (pointLoading.value || pointInfo.value))return;lastPointKey=key;const request=++pointRequest;pointInfo.value=null;copyStatus.value='';if(!geo){pointLoading.value=false;return;}pointLoading.value=true;
  try{const query=new URLSearchParams(geo);const response=await fetch(`${props.apiBase}/location-info/point?${query}`,{headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(request===pointRequest)pointInfo.value=data;}catch{if(request===pointRequest)pointInfo.value={errors:{what3words:'Location information is temporarily unavailable.'}};}finally{if(request===pointRequest)pointLoading.value=false;}}
 async function copyAddress(){try{await navigator.clipboard.writeText(`///${pointInfo.value.what3words.words} ${pointInfo.value.what3words.url}`);copyStatus.value='Copied';}catch{copyStatus.value='Select the address above to copy it';}}
 async function shareAddress(){const address=pointInfo.value?.what3words;if(!address)return;if(navigator.share){try{await navigator.share({title:'Festival meeting point',text:`///${address.words}`,url:address.url});}catch(error){if(error.name!=='AbortError')await copyAddress();}}else await copyAddress();}
-watch(selectionGeo,lookupPoint,{deep:true});
+watch(selectionGeo,geo=>lookupPoint(geo),{deep:true});
 watch(()=>props.selectedLocation,geo=>{if(props.selectable && !geo)pickedPoint.value=null;},{deep:true});
 watch(filteredPins,list=>{if(selectedPin.value && !list.some(pin=>pin.id===selectedPin.value.id))selectedPin.value=null;});
 watch(()=>props.festivalId,load);onMounted(load);

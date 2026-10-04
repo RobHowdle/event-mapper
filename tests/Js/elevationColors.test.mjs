@@ -14,3 +14,13 @@ test('sample interpolation preserves missing terrain rather than showing it as z
     assert.equal(interpolatedHeight(terrain,1,1),200);
     assert.equal(interpolatedHeight({...terrain,heights:[100,null,100,200]},.5,.5),null);
 });
+import {elevationContours, contourInterval} from '../../resources/js/utils/elevationContours.js';
+test('estimated contours label real heights and omit missing terrain', () => {
+ const terrain={rows:2,columns:2,heights:[100,140,100,140],minimum:100,maximum:140,bounds:{north:53,south:52,west:-2,east:-1}};
+ assert.equal(contourInterval(terrain),5);
+ const contours=elevationContours(terrain);
+ assert(contours.some(line=>line.height===120));
+ const midpoint=contours.find(line=>line.height===120).segments[0][0];
+ assert.equal(midpoint[1],-1.5);
+ assert.equal(elevationContours({...terrain,heights:[100,null,100,140]}).length,0);
+});

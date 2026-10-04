@@ -11,3 +11,4 @@
 .mapper-ui .leaflet-control-attribution { color: #222; }
 .mapper-ui .leaflet-container a { color: #225f97; }
 .mapper-ui .leaflet-tooltip { color: #20252b; }
+.mapper-ui .mapper-contour-label { background:rgba(255,255,255,.94);border:1px solid #81938a;color:#263b32;font-weight:600;font-size:11px;padding:2px 5px;box-shadow:none; }

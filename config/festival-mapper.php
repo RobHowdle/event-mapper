@@ -46,8 +46,8 @@ return [
 
     'what3words' => ['key' => env('WHAT3WORDS_API_KEY')],
     'topography' => [
-        'tiles' => env('FESTIVAL_MAPPER_TOPOGRAPHY_TILES', 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'),
-        'max_zoom' => 17,
+        'tiles' => env('FESTIVAL_MAPPER_TOPOGRAPHY_TILES', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
+        'max_zoom' => 19,
     ],
     'elevation' => [
         'enabled' => env('FESTIVAL_MAPPER_ELEVATION_ENABLED', true),

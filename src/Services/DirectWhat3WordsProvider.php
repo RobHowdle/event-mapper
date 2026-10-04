@@ -18,7 +18,7 @@ class DirectWhat3WordsProvider implements What3WordsProvider
     {
         $key = config('festival-mapper.what3words.key');
         if (! is_string($key) || $key === '') {
-            throw new RuntimeException('Three-word addresses are not configured.');
+            throw new RuntimeException('Three-word addresses are not configured.', 1000);
         }
         return $key;
     }
@@ -33,7 +33,7 @@ class DirectWhat3WordsProvider implements What3WordsProvider
             $response = Http::timeout(8)->withHeaders(['X-Api-Key' => $key])
                 ->get('https://api.what3words.com/v3/convert-to-3wa', ['coordinates' => $coordinates, 'language' => 'en']);
             if (! $response->successful()) {
-                throw new RuntimeException('Three-word address lookup failed.');
+                throw new RuntimeException('Three-word address lookup failed.', $this->failureCode($response->status()));
             }
             $words = $response->json('words');
             if (! is_string($words) || ! preg_match('/^[a-z]+\.[a-z]+\.[a-z]+$/', $words)) {
@@ -53,7 +53,10 @@ class DirectWhat3WordsProvider implements What3WordsProvider
         if (! is_array($lines)) {
             $response = Http::timeout(8)->withHeaders(['X-Api-Key' => $key])
                 ->get('https://api.what3words.com/v3/grid-section', ['bounding-box' => $bbox, 'format' => 'json']);
-            if (! $response->successful() || ! is_array($response->json('lines'))) {
+            if (! $response->successful()) {
+                throw new RuntimeException('Three-word grid lookup failed.', $this->failureCode($response->status()));
+            }
+            if (! is_array($response->json('lines'))) {
                 throw new RuntimeException('Three-word grid lookup failed.');
             }
             $lines = $response->json('lines');
@@ -61,4 +64,9 @@ class DirectWhat3WordsProvider implements What3WordsProvider
         }
         return ['lines' => $lines];
     }
+    private function failureCode(int $status): int
+    {
+        return match ($status) { 401 => 1003, 402 => 1004, 429 => 1005, default => 1007 };
+    }
+
 }

@@ -91,4 +91,19 @@ class LocationInfoTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_known_provider_failures_are_actionable_without_exposing_exception_messages(): void
+    {
+        config(['festival-mapper.elevation.enabled' => false]);
+        $this->app->instance(\FestivalMapper\Contracts\What3WordsProvider::class, new class implements \FestivalMapper\Contracts\What3WordsProvider {
+            public function enabled(): bool { throw new \RuntimeException('SECRET', 1001); }
+            public function address(float $latitude, float $longitude): array { throw new \RuntimeException('SECRET', 1004); }
+            public function grid(array $bounds): array { throw new \RuntimeException('SECRET', 1004); }
+        });
+        $settings = $this->getJson('/api/festival-mapper/location-info/settings')->assertOk()->assertJsonPath('what3words_enabled', false);
+        $this->assertStringContainsString('needs the what3words update', $settings->json('what3words_message'));
+        $response = $this->getJson('/api/festival-mapper/location-info/point?latitude=52.83&longitude=-1.39')->assertOk();
+        $this->assertStringContainsString('API plan', $response->json('errors.what3words'));
+        $this->assertStringNotContainsString('SECRET', $response->getContent());
+    }
+
 }

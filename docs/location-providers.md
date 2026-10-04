@@ -18,11 +18,11 @@ Activate Topography in the mapper admin's Layers section for each festival that 
 
 The sequential colour gradient and legend use the minimum and maximum valid sample heights for that site. The range stays fixed while panning, zooming, changing opacity or switching layers. Flat sites use the middle palette colour. Missing data stays transparent; no fake zero elevations are introduced. Bilinear interpolation between samples renders a smooth estimated surface. The legend states approximate sample spacing so visual smoothness is not confused with survey accuracy.
 
-Elevation opacity adjusts only the colour overlay. The festival artwork can be shown underneath it; the underlying topographic basemap remains available outside the artwork. Clicking a point still obtains that point's estimated elevation independently. Raster colours are dataset measurements and do not change with branding; controls inherit the festival theme.
+Elevation opacity adjusts only the colour overlay. A neutral street basemap provides location context. Estimated contours with height labels are shown by default; colour shading and festival artwork are optional and initially off. Clicking a point still obtains that point's estimated elevation independently. Raster colours are dataset measurements and do not change with branding; controls inherit the festival theme.
 
 Configurable environment variables:
 
-- `FESTIVAL_MAPPER_TOPOGRAPHY_TILES`: XYZ basemap template; default `https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png`.
+- `FESTIVAL_MAPPER_TOPOGRAPHY_TILES`: XYZ basemap template; default `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`.
 - `FESTIVAL_MAPPER_ELEVATION_ENABLED`: defaults to true.
 - `FESTIVAL_MAPPER_ELEVATION_ENDPOINT`: defaults to `https://api.opentopodata.org/v1`; may point to a self-hosted Open Topo Data service.
 - `FESTIVAL_MAPPER_ELEVATION_DATASET`: defaults to `aster30m` for global coverage.
@@ -34,3 +34,9 @@ Provider references:
 - https://developer.what3words.com/public-api/docs
 - https://www.opentopodata.org/api/
 - https://opentopomap.org/
+
+## Diagnostics
+
+The viewer maps known provider failure codes to fixed, safe messages for missing keys, invalid keys, unsupported plans or quota, request limits, missing YN Auth endpoints, application authentication and connection failures. It does not expose provider response bodies or exception messages. Grid load failures are visible beside the map; the three-metre grid otherwise appears from zoom 18. Coordinates remain available to administrators placing pins and are hidden from the public selected-location panel.
+
+An existing key alone does not enable the what3words conversion and grid APIs: the Free plan does not include them. Configure the correct entitlement in the what3words account if the viewer reports a plan failure.

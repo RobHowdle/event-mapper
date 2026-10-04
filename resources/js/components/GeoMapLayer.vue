@@ -13,7 +13,7 @@ import {nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch} from "vue"
 
 import L from "leaflet";
 import {drawPins} from "../utils/mapPins";
-import {terrainOverlay} from '../utils/terrainOverlay';
+import {terrainOverlay, terrainContours} from '../utils/terrainOverlay';
 import {artworkOverlay} from "../utils/artworkOverlay";
 import "leaflet/dist/leaflet.css";
 
@@ -39,11 +39,11 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["position-changed", "pin-selected", "location-picked"]);
+const emit = defineEmits(["position-changed", "pin-selected", "location-picked", "grid-status"]);
 
 const mapElement = ref(null);
 const map = shallowRef(null);
-let terrainImage; let tiles; let image; let pinGroup; let selectionMarker; let grid; let gridTimer; let gridRequest=0;
+let contourLines; let terrainImage; let tiles; let image; let pinGroup; let selectionMarker; let grid; let gridTimer; let gridRequest=0;
 
 const isSyncing = ref(false);
 
@@ -60,10 +60,10 @@ async function initialiseMap() {
 
 	map.value = L.map(mapElement.value, {
 		zoomControl: true,
-	}).setView(initialPosition, props.currentGeo ? 16 : 6);
+	}).setView(initialPosition, props.currentGeo ? (props.what3words ? 18 : 16) : 6);
 
 	tiles = L.tileLayer(props.topography ? props.tileUrl : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-		attribution: props.topography ? 'Map data &copy; OpenStreetMap contributors, SRTM | Map style &copy; OpenTopoMap (CC-BY-SA)' : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxNativeZoom:props.topography ? props.tileMaxZoom : 19,
         maxZoom:22,
         opacity:props.streetOpacity,
@@ -132,8 +132,9 @@ function renderArtwork() {
     renderPins();
 }
 function renderTerrain() {
+    contourLines?.remove(); contourLines=null;
     terrainImage?.remove(); terrainImage=null;
-    if(map.value && props.terrain) terrainImage=terrainOverlay(map.value,props.terrain,props.terrainOpacity);
+    if(map.value && props.terrain){terrainImage=terrainOverlay(map.value,props.terrain,props.terrainOpacity);contourLines=terrainContours(map.value,props.terrain);}
 }
 watch(()=>props.terrain,renderTerrain);
 watch(()=>props.terrainOpacity,value=>terrainImage?.setOpacity(value));
@@ -145,17 +146,19 @@ function renderPins() {
 }
 function renderSelection(){
  selectionMarker?.remove(); selectionMarker=null;
+ if(map.value && props.selectionGeo && props.active && props.what3words && map.value.getZoom()<18)map.value.setView([props.selectionGeo.latitude,props.selectionGeo.longitude],18,{animate:false});
  if(map.value && props.selectionGeo) selectionMarker=L.circleMarker([props.selectionGeo.latitude,props.selectionGeo.longitude],{radius:12,color:'#fff',weight:3,fillColor:getComputedStyle(mapElement.value).getPropertyValue('--system-color-primary').trim() || '#6366f1',fillOpacity:1,className:'mapper-selection-marker'}).addTo(map.value).bindTooltip('Selected location',{permanent:true,direction:'top'});
 }
-function scheduleGrid(){clearTimeout(gridTimer);gridRequest++;grid?.remove();grid=null;if(props.active && props.what3words && map.value?.getZoom()>=18)gridTimer=setTimeout(renderGrid,400);}
+function scheduleGrid(){clearTimeout(gridTimer);gridRequest++;grid?.remove();grid=null;if(props.active && props.what3words){if(map.value?.getZoom()>=18)gridTimer=setTimeout(renderGrid,400);else emit('grid-status','Zoom in to show the what3words three-metre grid.');}}
 async function renderGrid(){
  if(!map.value || !props.active || !props.what3words)return;
  const request=gridRequest,bounds=map.value.getBounds();
  if(map.value.distance(bounds.getSouthWest(),bounds.getNorthEast())>3900)return;
  const query=new URLSearchParams({south:bounds.getSouth(),west:bounds.getWest(),north:bounds.getNorth(),east:bounds.getEast()});
- try{const response=await fetch(`${props.apiBase}/location-info/grid?${query}`);if(!response.ok)return;const payload=await response.json();if(request!==gridRequest || !map.value)return;
+ try{const response=await fetch(`${props.apiBase}/location-info/grid?${query}`);const payload=await response.json();if(!response.ok){if(request===gridRequest)emit('grid-status',payload.message || 'The what3words grid is unavailable.');return;}if(request!==gridRequest || !map.value)return;
+  emit('grid-status',payload.lines.length ? '' : 'No grid is available for this area.');
   grid=L.layerGroup(payload.lines.map(line=>L.polyline([[line.start.lat,line.start.lng],[line.end.lat,line.end.lng]],{color:'#555',weight:1,opacity:.5,interactive:false}))).addTo(map.value);
- }catch{/* Address lookup remains usable if grid rendering is unavailable. */}
+ }catch{if(request===gridRequest)emit('grid-status','The what3words grid could not be loaded.');}
 }
 watch(()=>props.selectionGeo,renderSelection,{deep:true});
 watch(()=>props.what3words,scheduleGrid);
