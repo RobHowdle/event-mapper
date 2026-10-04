@@ -46,3 +46,13 @@ Provider references:
 The viewer maps known provider failure codes to fixed, safe messages for missing keys, invalid keys, unsupported plans or quota, request limits, missing YN Auth endpoints, application authentication and connection failures. It does not expose provider response bodies or exception messages. Grid load failures are visible beside the map; the three-metre grid otherwise appears from zoom 18. Coordinates remain available to administrators placing pins and are hidden from the public selected-location panel.
 
 An existing key alone does not enable the what3words conversion and grid APIs: the Free plan does not include them. Configure the correct entitlement in the what3words account if the viewer reports a plan failure.
+
+## Coordinate sharing without a YNF connection
+
+All three layers offer Copy coordinates, Copy location link, Share location and Open in Maps. The selected point is used when present; otherwise the controls use the centre crosshair. Use map centre selects the current crosshair explicitly. Raw coordinates stay hidden publicly until the user asks to copy them (a manual text field is available if browser clipboard access fails).
+
+A copied/shared URL is an external Google Maps search link containing the latitude and longitude, not a YNF redirect or server-generated share record. It requires no API key. Open in Maps uses an Apple Maps URL on iOS/iPadOS, a geo URI on Android, or the cross-platform Google Maps URL on desktop. Other maps offers explicit Apple Maps and Google Maps links. Actual app handling depends on the recipient's operating system, installed apps and preferences.
+
+With the built-in affine transformer, the initial online load resolves three geographic artwork corners once and retains the derived transform in memory. Image clicks, centre changes, pin rendering and cross-layer position conversion then run locally. Link generation, coordinate copying and sharing do not wait for elevation or what3words requests and remain usable if those services or the YNF connection fail after loading. Custom coordinate transformers retain their existing server conversion behaviour.
+
+The page, calibration and artwork must be loaded before losing connectivity; this does not introduce offline cold-start support or download basemap tiles. Message delivery and offline maps availability are handled by the messaging/map applications.

@@ -12,6 +12,7 @@
 import {nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch} from "vue";
 
 import L from "leaflet";
+import {pixelToGeo, geoToPixel} from '../utils/imageCalibration';
 import {drawPins} from "../utils/mapPins";
 import "leaflet/dist/leaflet.css";
 
@@ -20,6 +21,7 @@ const props = defineProps({
  pins: {type: Array, default: () => []},
  selectable: {type: Boolean, default: false},
  selectionGeo:{type:Object,default:null},
+ calibration:{type:Object,default:null},
 	festival: {
 		type: Object,
 		required: true,
@@ -79,6 +81,14 @@ async function apiFetch(path, options = {}) {
 	return response.status === 204 ? null : response.json();
 }
 
+async function resolveGeo(x,y) {
+ if(props.calibration)return {geo:pixelToGeo(props.calibration,x,y)};
+ return apiFetch(`/festivals/${props.festival.id}/coordinates/to-geo`,{method:'POST',body:JSON.stringify({x,y})});
+}
+async function resolvePixel(location) {
+ if(props.calibration)return {pixel:geoToPixel(props.calibration,location)};
+ return apiFetch(`/festivals/${props.festival.id}/coordinates/to-pixel`,{method:'POST',body:JSON.stringify({latitude:location.latitude,longitude:location.longitude})});
+}
 async function initialiseMap() {
 	await nextTick();
 
@@ -170,19 +180,11 @@ async function handleMapMoved() {
 	 * the actual festival image.
 	 */
 	if (pixelX < 0 || pixelY < 0 || pixelX > width || pixelY > height) {
+        emit("position-changed", null);
 		return;
 	}
 	try {
-		const result = await apiFetch(
-			`/festivals/${props.festival.id}/coordinates/to-geo`,
-			{
-				method: "POST",
-				body: JSON.stringify({
-					x: pixelX,
-					y: pixelY,
-				}),
-			},
-		);
+        const result = await resolveGeo(pixelX,pixelY);
 
 		if (request === positionRequest && props.active && map.value) emit("position-changed", result.geo);
 	} catch (error) {
@@ -197,16 +199,7 @@ async function moveToGeo(geo) {
 	}
 
 	try {
-		const result = await apiFetch(
-			`/festivals/${props.festival.id}/coordinates/to-pixel`,
-			{
-				method: "POST",
-				body: JSON.stringify({
-					latitude: geo.latitude,
-					longitude: geo.longitude,
-				}),
-			},
-		);
+        const result = await resolvePixel(geo);
 
 		if (!map.value || request !== syncRequest) return;
         isSyncing.value = true;
@@ -239,7 +232,7 @@ async function renderPins() {
     const request = ++pinRequest;
     const located = await Promise.all(props.pins.map(async pin => {
         try {
-            const result = await apiFetch(`/festivals/${props.festival.id}/coordinates/to-pixel`, {method:'POST', body:JSON.stringify({latitude:pin.latitude,longitude:pin.longitude})});
+            const result = await resolvePixel(pin);
             return {...pin, position:[-Number(result.pixel.y),Number(result.pixel.x)]};
         } catch { return {...pin,position:null}; }
     }));
@@ -251,7 +244,7 @@ async function renderPins() {
 async function pickLocation(event) {
     if (!props.selectable || !props.active) return;
     try {
-        const result = await apiFetch(`/festivals/${props.festival.id}/coordinates/to-geo`, {method:'POST',body:JSON.stringify({x:event.latlng.lng,y:-event.latlng.lat})});
+        const result = await resolveGeo(event.latlng.lng,-event.latlng.lat);
         emit('location-picked', result.geo);
     } catch (error) { console.error('Could not select location', error); }
 }
@@ -260,11 +253,12 @@ async function renderSelection() {
  selectionMarker?.remove(); selectionMarker=null;
  if(!props.selectionGeo || !map.value) return;
  try {
-  const result=await apiFetch(`/festivals/${props.festival.id}/coordinates/to-pixel`,{method:'POST',body:JSON.stringify(props.selectionGeo)});
+  const result=await resolvePixel(props.selectionGeo);
   if(request!==selectionRequest || !map.value) return;
   selectionMarker=L.circleMarker([-Number(result.pixel.y),Number(result.pixel.x)],{radius:12,color:'#fff',weight:3,fillColor:getComputedStyle(mapElement.value).getPropertyValue('--system-color-primary').trim() || '#6366f1',fillOpacity:1,className:'mapper-selection-marker'}).addTo(map.value).bindTooltip('Selected location',{permanent:true,direction:'top'});
  }catch { /* Selection can still be used on the geographic map without calibration. */ }
 }
+watch(()=>props.calibration,()=>{renderPins();renderSelection();if(props.currentGeo)moveToGeo(props.currentGeo);});
 watch(() => props.selectionGeo,renderSelection,{deep:true});
 watch(() => props.pins, renderPins, {deep:true});
 watch(() => props.active, async active => {
@@ -276,7 +270,7 @@ watch(() => props.active, async active => {
 onMounted(initialiseMap);
 
 onBeforeUnmount(() => {
-	pinRequest++; positionRequest++; syncRequest++;
+	pinRequest++; positionRequest++; syncRequest++; selectionRequest++;
 	if (map.value) {
 		map.value.remove();
 		map.value = null;

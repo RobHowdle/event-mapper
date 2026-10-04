@@ -72,6 +72,7 @@ async function initialiseMap() {
 	map.value.on("moveend", handleMapMoved);
     map.value.on('click', event => { if(props.selectable && props.active) emit('location-picked',{latitude:event.latlng.lat,longitude:event.latlng.lng}); });
     renderArtwork(); renderTerrain(); renderPins(); renderSelection(); scheduleGrid();
+    if(!props.currentGeo)emit('position-changed',{latitude:initialPosition[0],longitude:initialPosition[1]});
 }
 
 function handleMapMoved() {

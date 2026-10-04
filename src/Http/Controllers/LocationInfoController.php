@@ -23,6 +23,7 @@ class LocationInfoController extends Controller
             'what3words_enabled' => $enabled,
             'what3words_message' => $message,
             'elevation_enabled' => (bool) config('festival-mapper.elevation.enabled', true),
+            'local_affine_calibration' => config('festival-mapper.transformer') === \FestivalMapper\Transforms\AffineTransformer::class,
             'topography_tiles' => config('festival-mapper.topography.tiles'),
             'topography_max_zoom' => config('festival-mapper.topography.max_zoom', 17),
         ]);

@@ -33,7 +33,7 @@
             <div class="festival-map__canvas-wrapper">
                 <!-- v-show retains Leaflet instances and their independent zoom levels. -->
                 <FestivalImageMapLayer v-if="hasImage && festival" v-show="activeLayerId === 'festival-image'"
-                    :key="`image-${festivalId}`" :active="activeLayerId === 'festival-image'" :festival="festival" :current-geo="currentGeo" :api-base="apiBase" :pins="filteredPins" :selectable="true" :selection-geo="selectionGeo"
+                    :key="`image-${festivalId}`" :active="activeLayerId === 'festival-image'" :festival="festival" :current-geo="currentGeo" :api-base="apiBase" :calibration="calibration" :pins="filteredPins" :selectable="true" :selection-geo="selectionGeo"
                     @position-changed="onPositionChanged" @pin-selected="selectPin" @location-picked="pickLocation" />
                 <GeoMapLayer v-if="hasGeo" v-show="activeLayerId === 'geo-map'" :key="`geo-${festivalId}`"
                     :api-base="apiBase" :what3words="settings.what3words_enabled" @grid-status="gridMessage=$event" :active="activeLayerId === 'geo-map'" :festival="festival" :current-geo="currentGeo" :pins="filteredPins" :selectable="true" :selection-geo="selectionGeo" :corners="corners"
@@ -43,15 +43,26 @@
             </div>
             <p v-if="activeLayerId === 'geo-map'" class="festival-map__hint" role="status">{{ settings.what3words_enabled ? gridMessage : settings.what3words_message }}</p>
             <p class="festival-map__hint">{{ selectable ? 'Click a map to place your location pin. Drag the map to move around.' : (settings.what3words_enabled ? 'Click a point to see its what3words address and elevation.' : 'Select a pin or click the map to explore a location.') }}</p>
-            <div v-if="selectionGeo" class="festival-map__point" aria-label="Selected point" role="region">
-                <strong>Selected location</strong><p v-if="selectable">{{ Number(selectionGeo.latitude).toFixed(6) }}, {{ Number(selectionGeo.longitude).toFixed(6) }}</p>
-                <p v-if="pointLoading" role="status">Looking up location…</p>
-                <template v-else>
+            <div v-if="shareGeo" class="festival-map__point" aria-label="Selected point" role="region">
+                <strong>{{ selectionGeo ? 'Selected location' : 'Map centre' }}</strong><p v-if="selectable">{{ coordinatesText(shareGeo) }}</p>
+                <div class="festival-map__buttons festival-map__sharing">
+                    <button class="mapper-button" type="button" @click="copyLocation('coordinates')">Copy coordinates</button>
+                    <button class="mapper-button" type="button" @click="copyLocation('link')">Copy location link</button>
+                    <button class="mapper-button" type="button" @click="shareLocation">Share location</button>
+                    <a class="mapper-button" :href="mapLinks.open" target="_blank" rel="noopener noreferrer">Open in Maps</a>
+                    <button v-if="selectionGeo && validLocation(currentGeo)" class="mapper-button" type="button" @click="pickLocation(currentGeo)">Use map centre</button>
+                </div>
+                <details class="festival-map__map-options"><summary>Other maps</summary><div class="festival-map__buttons"><a class="mapper-button" :href="mapLinks.apple" target="_blank" rel="noopener noreferrer">Apple Maps</a><a class="mapper-button" :href="mapLinks.google" target="_blank" rel="noopener noreferrer">Google Maps</a></div></details>
+                <p v-if="locationNotice" role="status">{{ locationNotice }}</p>
+                <label v-if="manualCopy">Copy this text<input class="mapper-input" readonly :value="manualCopy" aria-label="Location text to copy" @focus="$event.target.select()" /></label>
+                <p class="festival-map__hint">This link opens the location directly in a maps service.</p>
+                <p v-if="selectionGeo && pointLoading" role="status">Looking up elevation…</p>
+                <template v-else-if="selectionGeo">
                     <p v-if="pointInfo?.what3words"><a :href="pointInfo.what3words.url" target="_blank" rel="noopener noreferrer">///{{ pointInfo.what3words.words }}</a></p>
                     <p v-else-if="pointInfo?.errors?.what3words">{{ pointInfo.errors.what3words }}</p><button v-if="pointInfo?.errors?.what3words" class="mapper-button" type="button" @click="lookupPoint(selectionGeo, true)">Retry location lookup</button>
                     <p v-if="pointInfo?.elevation">Elevation: {{ pointInfo.elevation.metres }} m above sea level <small>(terrain estimate)</small></p>
                     <p v-else>{{ pointInfo?.errors?.elevation }}</p>
-                    <div class="festival-map__buttons" v-if="pointInfo?.what3words"><button class="mapper-button" type="button" @click="copyAddress">{{ copyStatus || 'Copy what3words' }}</button><button class="mapper-button" type="button" @click="shareAddress">Share location</button></div>
+                    <div class="festival-map__buttons" v-if="pointInfo?.what3words"><button class="mapper-button" type="button" @click="copyAddress">{{ copyStatus || 'Copy what3words' }}</button><button class="mapper-button" type="button" @click="shareAddress">Share what3words</button></div>
                 </template>
             </div>
             <div v-if="showLocations" class="festival-map__locations">
@@ -81,6 +92,8 @@ import LayerSwitcher from './LayerSwitcher.vue';
 import FestivalImageMapLayer from './FestivalImageMapLayer.vue';
 import GeoMapLayer from './GeoMapLayer.vue';
 import {elevationGradient} from '../utils/elevationColors';
+import {imageCalibration, pixelToGeo} from '../utils/imageCalibration';
+import {coordinatesText, locationLinks, validLocation} from '../utils/locationLinks';
 import {safeLink} from '../utils/mapPins';
 import '../styles/mapper.css';
 const props=defineProps({festivalId:{type:Number,required:true},apiBase:{type:String,default:'/api/festival-mapper'},selectable:{type:Boolean,default:false},showLocations:{type:Boolean,default:true},pinsOverride:{type:Array,default:null},selectedLocation:{type:Object,default:null}});
@@ -88,11 +101,24 @@ const emit=defineEmits(['location-picked']);
 const festival=ref(null),layers=ref([]),loadedPins=ref([]),activeLayerId=ref(null),currentGeo=ref(null);
 const loading=ref(true),error=ref(''),search=ref(''),category=ref(''),selectedPin=ref(null),comparing=ref(false),artworkOpacity=ref(50),streetOpacity=ref(100),corners=ref([]),overlayError=ref('');
 let loadRequest=0,pointRequest=0,terrainRequest=0,lastPointKey="";
-const gridMessage=ref('');
+const gridMessage=ref(''),calibration=ref(null),locationNotice=ref(''),manualCopy=ref('');
 const terrain=ref(null),terrainLoading=ref(false),terrainError=ref(''),terrainOpacity=ref(0),terrainArtwork=ref(false),terrainCorners=ref([]);
 const pickedPoint=ref(null),pointInfo=ref(null),pointLoading=ref(false),copyStatus=ref('');
 const settings=ref({what3words_enabled:false,topography_tiles:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',topography_max_zoom:19});
 const selectionGeo=computed(()=>props.selectedLocation || pickedPoint.value);
+const shareGeo=computed(()=>validLocation(selectionGeo.value) ? selectionGeo.value : validLocation(currentGeo.value) ? currentGeo.value : null);
+const mapLinks=computed(()=>shareGeo.value ? locationLinks(shareGeo.value,typeof navigator === 'undefined' ? '' : navigator.userAgent,typeof navigator === 'undefined' ? '' : navigator.platform,typeof navigator === 'undefined' ? 0 : navigator.maxTouchPoints) : null);
+watch(shareGeo,()=>{locationNotice.value='';manualCopy.value='';},{deep:true});
+async function copyLocation(kind){
+ const value=kind==='coordinates' ? coordinatesText(shareGeo.value) : mapLinks.value.share;
+ try{await navigator.clipboard.writeText(value);locationNotice.value=kind==='coordinates' ? 'Coordinates copied' : 'Location link copied';manualCopy.value='';}
+ catch{manualCopy.value=value;locationNotice.value='Select the text below to copy it.';}
+}
+async function shareLocation(){
+ if(!shareGeo.value)return;
+ if(navigator.share){try{await navigator.share({title:selectedPin.value?.label || 'Festival meeting point',text:selectedPin.value?.label || 'Meet here',url:mapLinks.value.share});return;}catch(error){if(error.name==='AbortError')return;}}
+ await copyLocation('link');
+}
 const pins=computed(()=>(props.pinsOverride ?? loadedPins.value).filter(pin=>pin.latitude != null && pin.longitude != null));
 const activeLayers=computed(()=>layers.value.filter(layer=>layer.is_active && ['festival-image','geo-map','topography'].includes(layer.id)).map(layer=>layer.id === 'geo-map' ? {...layer,name:settings.value.what3words_enabled ? 'what3words' : 'Map'} : layer));
 const hasImage=computed(()=>activeLayers.value.some(layer=>layer.id==='festival-image'));
@@ -103,9 +129,9 @@ const categories=computed(()=>[...new Set(pins.value.map(pin=>pin.metadata?.cate
 const filteredPins=computed(()=>pins.value.filter(pin=>(!category.value || (pin.metadata?.category || 'other')===category.value) && `${pin.label || ''} ${pin.metadata?.description || ''}`.toLowerCase().includes(search.value.toLowerCase())));
 const categoryLabel=value=>String(value).replaceAll('_',' ').replace(/\b\w/g,letter=>letter.toUpperCase());
 async function apiFetch(path,body){const response=await fetch(`${props.apiBase}${path}`,{headers:{Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{method:'POST',body:JSON.stringify(body)}:{})});if(!response.ok)throw new Error('The map could not be loaded. Please try again.');return response.json();}
-async function load(){terrainRequest++;terrain.value=null;terrainLoading.value=false;terrainError.value='';terrainCorners.value=[];const request=++loadRequest;loading.value=true;error.value='';selectedPin.value=null;pickedPoint.value=null;pointInfo.value=null;pointRequest++;currentGeo.value=null;corners.value=[];comparing.value=false;activeLayerId.value=null;search.value='';category.value='';overlayError.value='';
+async function load(){calibration.value=null;terrainRequest++;terrain.value=null;terrainLoading.value=false;terrainError.value='';terrainCorners.value=[];const request=++loadRequest;loading.value=true;error.value='';selectedPin.value=null;pickedPoint.value=null;pointInfo.value=null;pointRequest++;currentGeo.value=null;corners.value=[];comparing.value=false;activeLayerId.value=null;search.value='';category.value='';overlayError.value='';
     try{const [data,enabled,locations,options]=await Promise.all([apiFetch(`/festivals/${props.festivalId}`),apiFetch(`/festivals/${props.festivalId}/layers`),apiFetch(`/festivals/${props.festivalId}/pins`),apiFetch(`/location-info/settings`).catch(()=>settings.value)]);if(request!==loadRequest)return;festival.value=data;settings.value=options;layers.value=enabled;loadedPins.value=locations;
-        if(data.map_width && data.map_height){try{const centre=await apiFetch(`/festivals/${props.festivalId}/coordinates/to-geo`,{x:data.map_width/2,y:data.map_height/2});if(request!==loadRequest)return;currentGeo.value=centre.geo;}catch{/* Artwork remains available before calibration. */}}
+        if(data.map_width && data.map_height){try{const points=await Promise.all([[0,0],[data.map_width,0],[0,data.map_height]].map(([x,y])=>apiFetch(`/festivals/${props.festivalId}/coordinates/to-geo`,{x,y})));if(request!==loadRequest)return;corners.value=points.map(point=>point.geo);calibration.value=options.local_affine_calibration === true ? imageCalibration(data,corners.value) : null;if(calibration.value)currentGeo.value=pixelToGeo(calibration.value,data.map_width/2,data.map_height/2);else{const centre=await apiFetch(`/festivals/${props.festivalId}/coordinates/to-geo`,{x:data.map_width/2,y:data.map_height/2});if(request!==loadRequest)return;currentGeo.value=centre.geo;}}catch{/* Artwork remains available before calibration. */}}
         activeLayerId.value=activeLayers.value[0]?.id || null;
     }catch(problem){if(request===loadRequest)error.value=problem.message;}finally{if(request===loadRequest)loading.value=false;}}
 async function loadTerrain(){
@@ -120,7 +146,7 @@ async function loadTerrain(){
 watch(activeLayerId,id=>{if(id==='topography' && !terrain.value && !terrainLoading.value)loadTerrain();});
 function switchLayer(id){comparing.value=false;activeLayerId.value=id;}
 async function toggleCompare(){if(comparing.value){comparing.value=false;return;}comparing.value=true;activeLayerId.value='geo-map';if(corners.value.length)return;const id=props.festivalId;try{const points=await Promise.all([[0,0],[festival.value.map_width,0],[0,festival.value.map_height]].map(([x,y])=>apiFetch(`/festivals/${id}/coordinates/to-geo`,{x,y})));if(id!==props.festivalId)return;corners.value=points.map(point=>point.geo);}catch{overlayError.value='Compare layers needs at least three valid calibration points. The street map is still available.';}}
-function onPositionChanged(geo){if(currentGeo.value && Math.abs(currentGeo.value.latitude-geo.latitude)<1e-9 && Math.abs(currentGeo.value.longitude-geo.longitude)<1e-9)return;currentGeo.value={latitude:Number(geo.latitude),longitude:Number(geo.longitude)};}
+function onPositionChanged(geo){if(!geo){currentGeo.value=null;return;}if(currentGeo.value && Math.abs(currentGeo.value.latitude-geo.latitude)<1e-9 && Math.abs(currentGeo.value.longitude-geo.longitude)<1e-9)return;currentGeo.value={latitude:Number(geo.latitude),longitude:Number(geo.longitude)};}
 function directionsUrl(pin){return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${pin.latitude},${pin.longitude}`)}`;}
 function selectPin(pin){pickLocation({latitude:pin.latitude,longitude:pin.longitude});selectedPin.value=pin;}
 function pickLocation(geo){selectedPin.value=null;pickedPoint.value={latitude:Number(geo.latitude),longitude:Number(geo.longitude)};onPositionChanged(geo);emit('location-picked',pickedPoint.value);}
@@ -138,6 +164,10 @@ watch(()=>props.festivalId,load);onMounted(load);
 .festival-map__header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; }
 h2,h3 { margin:0; font-weight:700; } h2 { font-size:1.25rem; } p { margin:6px 0 0; } .festival-map__header p,.festival-map__hint { font-size:.875rem; opacity:.75; }
 .festival-map__buttons { display:flex; gap:8px; flex-wrap:wrap; }
+.festival-map__sharing { margin-top:10px; }
+.festival-map__map-options { margin-top:10px; }
+.festival-map__map-options summary {cursor:pointer;font-size:.875rem;}
+.festival-map__map-options .festival-map__buttons {margin-top:8px;}
 .festival-map__terrain-controls { margin-bottom:16px; }
 .festival-map__gradient { height:14px;border-radius:7px;margin-top:8px; }
 .festival-map__legend-labels { display:flex;justify-content:space-between;gap:8px;font-size:.8rem;margin-top:4px; }
