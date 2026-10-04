@@ -73,11 +73,17 @@ class LayerApiTest extends TestCase
                 ],
                 [
                     'id' => 'geo-map',
-                    'name' => 'Map',
+                    'name' => 'what3words',
                     'is_active' => false,
                     'render' => [
                         'component' => 'GeoMapLayer',
                     ],
+                ],
+                [
+                    'id' => 'topography',
+                    'name' => 'Topography',
+                    'is_active' => false,
+                    'render' => ['component' => 'GeoMapLayer'],
                 ],
                 [
                     'id' => 'elevation',
@@ -287,3 +293,4 @@ class LayerApiTest extends TestCase
         };
     }
 }
+

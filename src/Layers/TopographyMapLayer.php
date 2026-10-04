@@ -6,16 +6,16 @@ use FestivalMapper\Contracts\LayerInterface;
 use FestivalMapper\Models\Festival;
 use FestivalMapper\ValueObjects\GeoCoordinate;
 
-class GeoMapLayer implements LayerInterface
+class TopographyMapLayer implements LayerInterface
 {
     public function id(): string
     {
-        return 'geo-map';
+        return 'topography';
     }
 
     public function name(): string
     {
-        return 'what3words';
+        return 'Topography';
     }
 
     public function render(): array

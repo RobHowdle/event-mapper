@@ -11,6 +11,7 @@ use FestivalMapper\Engines\LayerEngine;
 use FestivalMapper\Engines\PinEngine;
 use FestivalMapper\Layers\FestivalImageLayer;
 use FestivalMapper\Layers\GeoMapLayer;
+use FestivalMapper\Layers\TopographyMapLayer;
 
 class FestivalMapperServiceProvider extends ServiceProvider
 {
@@ -57,5 +58,7 @@ class FestivalMapperServiceProvider extends ServiceProvider
         $layerEngine->register(
             $this->app->make(GeoMapLayer::class)
         );
+        $layerEngine->register($this->app->make(TopographyMapLayer::class));
     }
 }
+

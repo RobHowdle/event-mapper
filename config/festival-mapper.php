@@ -44,4 +44,15 @@ return [
     */
     'transformer' => \FestivalMapper\Transforms\AffineTransformer::class,
 
+    'what3words' => ['key' => env('WHAT3WORDS_API_KEY')],
+    'topography' => [
+        'tiles' => env('FESTIVAL_MAPPER_TOPOGRAPHY_TILES', 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'),
+        'max_zoom' => 17,
+    ],
+    'elevation' => [
+        'enabled' => env('FESTIVAL_MAPPER_ELEVATION_ENABLED', true),
+        'endpoint' => env('FESTIVAL_MAPPER_ELEVATION_ENDPOINT', 'https://api.opentopodata.org/v1'),
+        'dataset' => env('FESTIVAL_MAPPER_ELEVATION_DATASET', 'aster30m'),
+    ],
 ];
+

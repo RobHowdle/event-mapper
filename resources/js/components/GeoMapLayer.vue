@@ -20,6 +20,12 @@ const props = defineProps({
  active: {type:Boolean,default:true},
  pins: {type:Array,default:()=>[]},
  selectable:{type:Boolean,default:false},
+ selectionGeo:{type:Object,default:null},
+ topography:{type:Boolean,default:false},
+ tileUrl:{type:String,default:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'},
+ tileMaxZoom:{type:Number,default:17},
+ apiBase:{type:String,default:'/api/festival-mapper'},
+ what3words:{type:Boolean,default:false},
  festival:{type:Object,default:null},
  corners:{type:Array,default:()=>[]},
  artworkOpacity:{type:Number,default:0},
@@ -34,7 +40,7 @@ const emit = defineEmits(["position-changed", "pin-selected", "location-picked"]
 
 const mapElement = ref(null);
 const map = shallowRef(null);
-let tiles; let image; let pinGroup;
+let tiles; let image; let pinGroup; let selectionMarker; let grid; let gridTimer; let gridRequest=0;
 
 const isSyncing = ref(false);
 
@@ -53,19 +59,20 @@ async function initialiseMap() {
 		zoomControl: true,
 	}).setView(initialPosition, props.currentGeo ? 16 : 6);
 
-	tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-		attribution:
-			'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-		maxZoom: 19,
+	tiles = L.tileLayer(props.topography ? props.tileUrl : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+		attribution: props.topography ? 'Map data &copy; OpenStreetMap contributors, SRTM | Map style &copy; OpenTopoMap (CC-BY-SA)' : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxNativeZoom:props.topography ? props.tileMaxZoom : 19,
+        maxZoom:22,
         opacity:props.streetOpacity,
 	}).addTo(map.value);
 
 	map.value.on("moveend", handleMapMoved);
     map.value.on('click', event => { if(props.selectable && props.active) emit('location-picked',{latitude:event.latlng.lat,longitude:event.latlng.lng}); });
-    renderArtwork(); renderPins();
+    renderArtwork(); renderPins(); renderSelection(); scheduleGrid();
 }
 
 function handleMapMoved() {
+    scheduleGrid();
 	if (!map.value || !props.active || isSyncing.value) return;
 
 
@@ -126,18 +133,36 @@ function renderPins() {
     const color=getComputedStyle(mapElement.value).getPropertyValue('--system-color-primary').trim() || '#6366f1';
     pinGroup=drawPins(map.value,props.pins,pin=>[Number(pin.latitude),Number(pin.longitude)],pin=>emit('pin-selected',pin),color);
 }
+function renderSelection(){
+ selectionMarker?.remove(); selectionMarker=null;
+ if(map.value && props.selectionGeo) selectionMarker=L.circleMarker([props.selectionGeo.latitude,props.selectionGeo.longitude],{radius:12,color:'#fff',weight:3,fillColor:getComputedStyle(mapElement.value).getPropertyValue('--system-color-primary').trim() || '#6366f1',fillOpacity:1,className:'mapper-selection-marker'}).addTo(map.value).bindTooltip('Selected location',{permanent:true,direction:'top'});
+}
+function scheduleGrid(){clearTimeout(gridTimer);gridRequest++;grid?.remove();grid=null;if(props.active && props.what3words && map.value?.getZoom()>=18)gridTimer=setTimeout(renderGrid,400);}
+async function renderGrid(){
+ if(!map.value || !props.active || !props.what3words)return;
+ const request=gridRequest,bounds=map.value.getBounds();
+ if(map.value.distance(bounds.getSouthWest(),bounds.getNorthEast())>3900)return;
+ const query=new URLSearchParams({south:bounds.getSouth(),west:bounds.getWest(),north:bounds.getNorth(),east:bounds.getEast()});
+ try{const response=await fetch(`${props.apiBase}/location-info/grid?${query}`);if(!response.ok)return;const payload=await response.json();if(request!==gridRequest || !map.value)return;
+  grid=L.layerGroup(payload.lines.map(line=>L.polyline([[line.start.lat,line.start.lng],[line.end.lat,line.end.lng]],{color:'#555',weight:1,opacity:.5,interactive:false}))).addTo(map.value);
+ }catch{/* Address lookup remains usable if grid rendering is unavailable. */}
+}
+watch(()=>props.selectionGeo,renderSelection,{deep:true});
+watch(()=>props.what3words,scheduleGrid);
 watch(() => props.pins,renderPins,{deep:true});
 watch(() => props.corners,renderArtwork,{deep:true});
 watch(() => props.artworkOpacity,opacity=>image?.setOpacity(opacity));
 watch(() => props.streetOpacity,opacity=>tiles?.setOpacity(opacity));
 watch(() => props.active,async active=>{
-    if(!active) return;
+    if(!active) {scheduleGrid();return;}
     await initialiseMap(); await nextTick(); map.value?.invalidateSize({pan:false});
     if(props.currentGeo) moveToGeo(props.currentGeo);
+    scheduleGrid();
 });
 onMounted(initialiseMap);
 
 onBeforeUnmount(() => {
+ clearTimeout(gridTimer);gridRequest++;
 	if (map.value) {
 		map.value.remove();
 		map.value = null;

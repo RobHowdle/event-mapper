@@ -535,30 +535,13 @@
 									required />
 							</label>
 
-							<div class="festival-admin__split">
-								<label class="festival-admin__field">
-									<span>Latitude</span>
-									<input
-										v-model.number="pinForm.latitude"
-										type="number"
-										step="any"
-										min="-90"
-										max="90"
-										required />
-								</label>
-
-								<label class="festival-admin__field">
-									<span>Longitude</span>
-									<input
-										v-model.number="pinForm.longitude"
-										type="number"
-										step="any"
-										min="-180"
-										max="180"
-										required />
-								</label>
-							</div>
-
+                            <p class="festival-admin__helper-text">Place a pin on the map below. Its latitude and longitude are filled in for you.</p>
+                            <details><summary class="festival-admin__helper-text">Enter coordinates manually (optional)</summary>
+                                <div class="festival-admin__split">
+                                    <label class="festival-admin__field"><span>Latitude</span><input v-model.number="pinForm.latitude" type="number" step="any" min="-90" max="90" /></label>
+                                    <label class="festival-admin__field"><span>Longitude</span><input v-model.number="pinForm.longitude" type="number" step="any" min="-180" max="180" /></label>
+                                </div>
+                            </details>
                             <div class="festival-admin__split">
                                 <label class="festival-admin__field"><span>Category</span>
                                     <select v-model="pinForm.category" aria-label="Category"><option v-for="category in pinCategories" :key="category.value" :value="category.value">{{ category.label }}</option></select>
@@ -566,14 +549,14 @@
                                 <label class="festival-admin__field"><span>Information link (optional)</span><input v-model.trim="pinForm.url" type="url" placeholder="https://" /></label>
                             </div>
                             <label class="festival-admin__field"><span>Description (optional)</span><textarea v-model.trim="pinForm.description" rows="3" maxlength="2000" placeholder="Tell visitors what they can find here." /></label>
-                            <p class="festival-admin__helper-text">Choose a position on the map below, or enter latitude and longitude.</p>
-                            <FestivalMap :festival-id="selectedFestivalId" :api-base="apiBase" :pins-override="pins" selectable :show-locations="false" @location-picked="setPinLocation" />
+                            <p class="festival-admin__helper-text">Choose a position by clicking the map. Click again to move the selected pin.</p>
+                            <FestivalMap :festival-id="selectedFestivalId" :api-base="apiBase" :pins-override="pins" :selected-location="pinSelection" selectable :show-locations="false" @location-picked="setPinLocation" />
 
 							<div class="festival-admin__actions">
 								<button
 									class="festival-admin__primary-button"
 									type="submit"
-									:disabled="isSaving">
+									:disabled="isSaving || !pinSelection">
                                     {{ editingPinId ? "Save Location" : "Add Location" }}
 								</button>
                                 <button v-if="editingPinId" type="button" class="festival-admin__secondary-button" @click="cancelPinEdit">Cancel edit</button>
@@ -891,6 +874,7 @@ const festivalForm = ref(createFestivalForm());
 const calibrationForm = ref(createCalibrationForm());
 const pinForm = ref(createPinForm());
 const editingPinId = ref(null);
+const pinSelection=computed(()=>pinForm.value.latitude!=='' && pinForm.value.latitude!=null && pinForm.value.longitude!=='' && pinForm.value.longitude!=null ? {latitude:Number(pinForm.value.latitude),longitude:Number(pinForm.value.longitude)} : null);
 const pinCategories = [
  {value:'stage',label:'Stage'}, {value:'food',label:'Food'}, {value:'drink',label:'Drink'},
  {value:'toilets',label:'Toilets'}, {value:'medical',label:'Medical'}, {value:'information',label:'Information'},
@@ -1305,7 +1289,7 @@ async function toggleLayer(layer) {
 }
 
 async function createPin() {
-	if (!selectedFestivalId.value) {
+	if (!selectedFestivalId.value || !pinSelection.value) {
 		return;
 	}
 

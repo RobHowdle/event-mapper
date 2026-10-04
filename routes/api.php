@@ -5,11 +5,17 @@ use FestivalMapper\Http\Controllers\CoordinateController;
 use FestivalMapper\Http\Controllers\FestivalController;
 use FestivalMapper\Http\Controllers\LayerController;
 use FestivalMapper\Http\Controllers\PinController;
+use FestivalMapper\Http\Controllers\LocationInfoController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix(config('festival-mapper.route_prefix', 'api/festival-mapper'))
     ->middleware(config('festival-mapper.middleware', ['api']))
     ->group(function () {
+
+        // Provider keys stay server-side; these endpoints expose only results.
+        Route::get('location-info/settings', [LocationInfoController::class, 'settings']);
+        Route::get('location-info/point', [LocationInfoController::class, 'point'])->middleware('throttle:60,1');
+        Route::get('location-info/grid', [LocationInfoController::class, 'grid'])->middleware('throttle:60,1');
 
         // Festivals
         Route::get('festivals', [FestivalController::class, 'index']);
@@ -45,3 +51,4 @@ Route::prefix(config('festival-mapper.route_prefix', 'api/festival-mapper'))
         Route::post('festivals/{festival}/layers/{layerId}/activate', [LayerController::class, 'activate']);
         Route::post('festivals/{festival}/layers/{layerId}/deactivate', [LayerController::class, 'deactivate']);
     });
+

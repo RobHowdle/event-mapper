@@ -19,6 +19,7 @@ const props = defineProps({
  active: {type: Boolean, default: true},
  pins: {type: Array, default: () => []},
  selectable: {type: Boolean, default: false},
+ selectionGeo:{type:Object,default:null},
 	festival: {
 		type: Object,
 		required: true,
@@ -40,7 +41,7 @@ const emit = defineEmits(["position-changed", "pin-selected", "location-picked"]
 const mapElement = ref(null);
 const map = shallowRef(null);
 const imageOverlay = shallowRef(null);
-let pinGroup; let pinRequest = 0; let positionRequest = 0; let syncRequest = 0;
+let pinGroup; let pinRequest = 0; let positionRequest = 0; let syncRequest = 0; let selectionMarker; let selectionRequest=0;
 
 const isSyncing = ref(false);
 
@@ -131,7 +132,7 @@ async function initialiseMap() {
 	map.value.fitBounds(bounds);
 	map.value.on("moveend", handleMapMoved);
     map.value.on("click", pickLocation);
-    await renderPins();
+    await renderPins(); await renderSelection();
 
 	/*
 	 * If another layer has already
@@ -254,6 +255,17 @@ async function pickLocation(event) {
         emit('location-picked', result.geo);
     } catch (error) { console.error('Could not select location', error); }
 }
+async function renderSelection() {
+ const request=++selectionRequest;
+ selectionMarker?.remove(); selectionMarker=null;
+ if(!props.selectionGeo || !map.value) return;
+ try {
+  const result=await apiFetch(`/festivals/${props.festival.id}/coordinates/to-pixel`,{method:'POST',body:JSON.stringify(props.selectionGeo)});
+  if(request!==selectionRequest || !map.value) return;
+  selectionMarker=L.circleMarker([-Number(result.pixel.y),Number(result.pixel.x)],{radius:12,color:'#fff',weight:3,fillColor:getComputedStyle(mapElement.value).getPropertyValue('--system-color-primary').trim() || '#6366f1',fillOpacity:1,className:'mapper-selection-marker'}).addTo(map.value).bindTooltip('Selected location',{permanent:true,direction:'top'});
+ }catch { /* Selection can still be used on the geographic map without calibration. */ }
+}
+watch(() => props.selectionGeo,renderSelection,{deep:true});
 watch(() => props.pins, renderPins, {deep:true});
 watch(() => props.active, async active => {
     if (!active) {positionRequest++; return;}
